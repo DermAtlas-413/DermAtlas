@@ -1,0 +1,21 @@
+# --- OS & Editors (Global) ---
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# --- Beads (AI Issue Tracker) ---
+.beads/beads.db
+.beads/beads.db-shm
+.beads/beads.db-wal
+.beads/lock
+
+# --- Claude Code ---
+.claude/
+codestory_history.json
+
+# --- Environment Variables ---
+# Ignore .env files everywhere in the project
+.env
+.env.local
+**/.env

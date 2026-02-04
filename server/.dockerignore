@@ -1,0 +1,31 @@
+# Git
+.git
+.gitignore
+
+# Environment
+.env
+.env.*
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+venv/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Documentation and tests
+*.md
+tests/
+docs/
+
+# Development files
+requirements-dev.txt
+.env.example
