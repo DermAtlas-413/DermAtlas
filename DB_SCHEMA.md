@@ -56,6 +56,7 @@ captured_at|TIMESTAMP|DEFAULT NOW()|Timestamp of the upload.
 
 ### Recommendation_Feedback
 Tracking for feedback given by primary care physicians for the re-ranking layer. Tracks which reference images were deemed useful or not.
+
 Column Name|Data Type|Constraints|Description
 |---|---|---|---|
 feedback_id|SERIAL|PRIMARY KEY|Unique ID for the feedback action.
@@ -67,6 +68,7 @@ feedback_timestamp|TIMESTAMP|DEFAULT NOW()|Time the feedback was given.
 
 ### Audit_Logs
 Tracks who viewed what and when for HIPAA compliance and security.
+
 Column Name|Data Type|Constraints|Description
 |---|---|---|---|
 log_id|BIGSERIAL|PRIMARY KEY|Unique ID for the log entry.
