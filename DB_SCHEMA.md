@@ -10,7 +10,7 @@ user_id|SERIAL|PRIMARY KEY|Unique identifier for the user.
 email|VARCHAR(255)|UNIQUE| NOT NULL|User's email address (login credential).
 password_hash|VARCHAR(255)|NOT NULL|Hashed password (never store plain text).
 full_name|VARCHAR(100)|-|Full legal name of the user.
-role|VARCHAR(10)|NOT NULL|Enum: [PCP| PATIENT]
+role|VARCHAR(10)|NOT NULL|Enum: [PCP, PATIENT]
 npi_number|VARCHAR(20)|-|National Provider Identifier (for physicians only).
 created_at|TIMESTAMP|DEFAULT NOW()|Account creation timestamp.
 
@@ -23,7 +23,7 @@ patient_id|SERIAL|PRIMARY KEY|Unique identifier for the patient.
 primary_physician_id|INTEGER|Foreign Key -> users(user_id)|The PCP responsible for this patient.
 mrn_internal|VARCHAR(50)|UNIQUE|Internal Medical Record Number (hospital ID).
 date_of_birth|DATE|-|Patient's DOB for age-based analytics.
-gender|VARCHAR(5)|-|Enum: [male| female]
+gender|VARCHAR(5)|-|Enum: [male, female]
 created_at|TIMESTAMP|DEFAULT NOW()|Record creation timestamp.
 
 ### Reference_Atlas [Existing Diagnosis]
