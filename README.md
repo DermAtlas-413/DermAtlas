@@ -46,6 +46,33 @@ bd setup claude
 
 **How we use it:**
 
-* We commit the `.beads/` folder (JSONL files) to Git.
-* We **do not** commit the local database (`beads.db`).
+* We commit the `.beads/` folder (JSONL files) to Git — issues travel with the code.
+* We **do not** commit the local database (`beads.db`) — it's rebuilt locally from the JSONL files.
 * Use `bd ready` to see available tasks.
+
+**Common commands (run from `server/`):**
+
+```bash
+bd ready                                    # Issues you can start now (no blockers)
+bd list                                     # All open issues
+bd show <id>                                # Full spec: what to build, which tests to pass
+bd update <id> --status=in_progress         # Claim an issue before starting
+bd close <id>                               # Mark complete
+bd sync                                     # Sync issue changes with remote
+```
+
+**Current backlog — backend TDD green phase:**
+
+The `server/` has 85 contract tests written (all currently red). Implementation work is tracked in beads with blocking dependencies enforcing order:
+
+| Issue | Title | Status |
+|---|---|---|
+| DA-5rb | Implement ORM models | open — **start here** |
+| DA-7hi | Implement auth utilities | blocked by DA-5rb |
+| DA-hpu | POST /api/v1/auth/token | blocked by DA-5rb, DA-7hi |
+| DA-iad | POST /api/v1/upload/image | blocked by DA-5rb, DA-7hi |
+| DA-nao | POST /api/v1/lesion/analyze | blocked by DA-5rb, DA-7hi |
+| DA-ack | POST /api/v1/feedback | blocked by DA-5rb, DA-7hi |
+| DA-8hx | GET /api/v1/patients/{id} | blocked by DA-5rb, DA-7hi |
+
+See `server/CLAUDE.md` for the full developer context, model schemas, and test-running instructions.
