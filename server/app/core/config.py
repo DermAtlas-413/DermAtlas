@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     PGPASSWORD: str = ""
     PGDATABASE: str = ""
 
+    # Auth (JWT)
+    SECRET_KEY: str = "change-me-in-production-use-a-long-random-string"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
     # Google Cloud Platform
     GCP_PROJECT_ID: str = ""
     GCS_BUCKET_NAME: str = ""
