@@ -1,0 +1,21 @@
+# Python environments
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Local env files
+.env
+
+# Local data artifacts
+data/
+downloads/
+*.csv
+*.parquet
+
+# Logs
+logs/
+*.log
+
+# MacOS
+.DS_Store
