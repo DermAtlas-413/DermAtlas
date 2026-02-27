@@ -15,9 +15,55 @@ DermAtlas is a Clinical Decision Support (CDS) system designed to assist Primary
 
 ## Development Setup
 
-### Standard Setup
-1. **Frontend:** Navigate to `client/`, install dependencies with `npm install`, and run `npx expo start`.
-2. **Backend:** Navigate to `server/`, create a virtual environment, and install requirements.
+### Frontend
+Navigate to `client/`, install dependencies with `npm install`, and run `npx expo start`.
+
+### Backend (local)
+
+**Prerequisites:** Python 3.11+, Docker
+
+**1. Start Postgres**
+```bash
+cd server
+docker compose up -d dermatlas-postgres
+```
+This spins up Postgres 15 on `localhost:5432` with database `dermatlas_dev` (user/pass: `dermatlas/dermatlas`).
+
+**2. Create and activate a virtual environment**
+```bash
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+```
+
+**3. Apply database migrations**
+```bash
+alembic upgrade head
+```
+
+**4. Run the dev server**
+```bash
+uvicorn app.main:app --reload
+```
+
+The API is now available at `http://localhost:8000`.
+
+#### API Documentation
+
+| URL | Description |
+|---|---|
+| `http://localhost:8000/docs` | **Swagger UI** — interactive, try endpoints directly in the browser. Use the **Authorize** button to log in and get a JWT for protected routes. |
+| `http://localhost:8000/redoc` | **ReDoc** — clean, readable reference documentation. |
+| `http://localhost:8000/openapi.json` | Raw OpenAPI schema. |
+
+#### Running Tests
+Tests use an in-memory SQLite database — no Postgres or Docker required.
+```bash
+cd server
+source venv/bin/activate
+ENV=testing pytest --no-cov    # fast, no coverage gate
+ENV=testing pytest             # full run with 80% coverage gate
+```
 
 ### (Optional) AI-Assisted Workflow with Beads
 For developers using **Claude Code** or AI agents, we use [Beads](https://github.com/steveyegge/beads) (`bd`) to manage context and tasks.
@@ -61,18 +107,10 @@ bd close <id>                               # Mark complete
 bd sync                                     # Sync issue changes with remote
 ```
 
-**Current backlog — backend TDD green phase:**
-
-The `server/` has 85 contract tests written (all currently red). Implementation work is tracked in beads with blocking dependencies enforcing order:
-
-| Issue | Title | Status |
-|---|---|---|
-| DA-5rb | Implement ORM models | open — **start here** |
-| DA-7hi | Implement auth utilities | blocked by DA-5rb |
-| DA-hpu | POST /api/v1/auth/token | blocked by DA-5rb, DA-7hi |
-| DA-iad | POST /api/v1/upload/image | blocked by DA-5rb, DA-7hi |
-| DA-nao | POST /api/v1/lesion/analyze | blocked by DA-5rb, DA-7hi |
-| DA-ack | POST /api/v1/feedback | blocked by DA-5rb, DA-7hi |
-| DA-8hx | GET /api/v1/patients/{id} | blocked by DA-5rb, DA-7hi |
+**Checking the backlog:**
+```bash
+bd ready       # issues you can start now
+bd list        # all open issues
+```
 
 See `server/CLAUDE.md` for the full developer context, model schemas, and test-running instructions.
