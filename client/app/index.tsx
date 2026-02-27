@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { router } from "expo-router";
 import {
   SafeAreaView,
   View,
@@ -50,10 +51,11 @@ export default function Index() {
                 secureTextEntry
                 style={styles.input}
               />
-
-              <Pressable style={styles.button} onPress={() => {}}>
-                <Text style={styles.buttonText}>Login</Text>
-              </Pressable>
+              <Pressable
+              style={styles.button}
+              onPress={() => router.replace("/upload")}>
+                <Text>Login</Text>
+                </Pressable>
 
               <Pressable onPress={() => {}}>
                 <Text style={styles.link}>Forgot Password?</Text>
