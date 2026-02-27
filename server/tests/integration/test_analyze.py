@@ -88,7 +88,7 @@ async def test_analyze_returns_at_most_10_results(
         headers=pcp_token,
     )
     assert response.status_code == 200
-    assert len(response.json()["results"]) <= 10
+    assert len(response.json()["results"]) == 10
 
 
 async def test_analyze_empty_vector_results_returns_empty_list(
@@ -151,6 +151,12 @@ async def test_analyze_query_owned_by_other_physician_returns_403(
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
+
+
+async def test_analyze_missing_query_id_returns_422(client, pcp_token):
+    """Missing required query_id field must return 422."""
+    response = await client.post(ANALYZE_URL, json={}, headers=pcp_token)
+    assert response.status_code == 422
 
 
 async def test_analyze_vertex_ai_unavailable_returns_503(

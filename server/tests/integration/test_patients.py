@@ -123,6 +123,16 @@ async def test_get_patient_negative_id_returns_422(client, pcp_token):
 # ---------------------------------------------------------------------------
 
 
+async def test_get_patient_no_images_returns_empty_list(client, pcp_token, patient_record):
+    """Patient with no uploaded images must return clinical_images == []."""
+    response = await client.get(
+        f"{PATIENTS_URL}/{patient_record.patient_id}",
+        headers=pcp_token,
+    )
+    assert response.status_code == 200
+    assert response.json()["clinical_images"] == []
+
+
 async def test_get_patient_creates_audit_log(
     client, pcp_token, pcp_user, patient_record, db_session
 ):

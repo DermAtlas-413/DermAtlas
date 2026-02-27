@@ -22,7 +22,7 @@ UPLOAD_URL = "/api/v1/upload/image"
 
 def _jpeg_file(data: bytes | None = None, filename: str = "test.jpg"):
     """Build a tuple suitable for httpx multipart files."""
-    return ("file", (filename, io.BytesIO(data or make_jpeg_bytes()), "image/jpeg"))
+    return ("file", (filename, io.BytesIO(data if data is not None else make_jpeg_bytes()), "image/jpeg"))
 
 
 def _png_file(data: bytes | None = None):
@@ -279,3 +279,44 @@ async def test_upload_gcs_failure_returns_503(
         headers=pcp_token,
     )
     assert response.status_code == 503
+
+
+async def test_upload_requires_lesion_location_returns_422(client, pcp_token, patient_record):
+    """lesion_location is required; omitting it returns 422."""
+    response = await client.post(
+        UPLOAD_URL,
+        files=[_jpeg_file()],
+        data={"patient_id": str(patient_record.patient_id)},
+        headers=pcp_token,
+    )
+    assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Audit (HIPAA)
+# ---------------------------------------------------------------------------
+
+
+async def test_upload_creates_audit_log(
+    client, pcp_token, pcp_user, patient_record, db_session, mock_gcs
+):
+    """After a successful upload, an AuditLog row with action='UPLOAD' must exist."""
+    from sqlalchemy import select
+    from app.models.audit_log import AuditLog
+
+    response = await client.post(
+        UPLOAD_URL,
+        files=[_jpeg_file()],
+        data={"patient_id": str(patient_record.patient_id), "lesion_location": LESION_LOCATION},
+        headers=pcp_token,
+    )
+    assert response.status_code == 201
+
+    result = await db_session.execute(
+        select(AuditLog).where(
+            AuditLog.user_id == pcp_user.user_id,
+            AuditLog.action == "UPLOAD",
+        )
+    )
+    log = result.scalar_one_or_none()
+    assert log is not None

@@ -103,3 +103,68 @@ class TestPatientResponseSchema:
         )
         assert p.patient_id == 1
         assert p.mrn_internal == "MRN-001"
+
+
+class TestClinicalImageSummarySchema:
+    def test_required_fields(self):
+        """ClinicalImageSummary must expose query_id, gcs_uri, lesion_location."""
+        from app.schemas.patient import ClinicalImageSummary
+
+        img = ClinicalImageSummary(
+            query_id="abc-123",
+            gcs_uri="gs://bucket/img.jpg",
+            lesion_location="left arm",
+        )
+        assert img.query_id == "abc-123"
+        assert img.gcs_uri == "gs://bucket/img.jpg"
+        assert img.lesion_location == "left arm"
+
+    def test_captured_at_is_optional(self):
+        from app.schemas.patient import ClinicalImageSummary
+
+        img = ClinicalImageSummary(
+            query_id="abc-123",
+            gcs_uri="gs://bucket/img.jpg",
+            lesion_location="left arm",
+        )
+        assert img.captured_at is None
+
+
+class TestAnalyzeRequestSchema:
+    def test_requires_query_id(self):
+        """AnalyzeRequest must require query_id."""
+        from pydantic import ValidationError
+        from app.schemas.analyze import AnalyzeRequest
+
+        with pytest.raises(ValidationError):
+            AnalyzeRequest()
+
+    def test_accepts_query_id(self):
+        from app.schemas.analyze import AnalyzeRequest
+
+        req = AnalyzeRequest(query_id="abc-uuid")
+        assert req.query_id == "abc-uuid"
+
+
+class TestFeedbackRequestSchema:
+    def test_requires_all_three_fields(self):
+        """FeedbackRequest requires query_id, reference_id, and is_helpful."""
+        from pydantic import ValidationError
+        from app.schemas.feedback import FeedbackRequest
+
+        with pytest.raises(ValidationError):
+            FeedbackRequest(reference_id="ref-1", is_helpful=True)  # missing query_id
+
+        with pytest.raises(ValidationError):
+            FeedbackRequest(query_id="q-1", is_helpful=True)  # missing reference_id
+
+        with pytest.raises(ValidationError):
+            FeedbackRequest(query_id="q-1", reference_id="ref-1")  # missing is_helpful
+
+    def test_accepts_valid_payload(self):
+        from app.schemas.feedback import FeedbackRequest
+
+        req = FeedbackRequest(query_id="q-1", reference_id="ref-1", is_helpful=False)
+        assert req.query_id == "q-1"
+        assert req.reference_id == "ref-1"
+        assert req.is_helpful is False

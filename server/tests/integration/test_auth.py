@@ -112,6 +112,27 @@ async def test_login_html_in_email_is_not_reflected(client):
     assert xss_payload not in response.text
 
 
+async def test_expired_token_returns_401(client, pcp_user):
+    """A request with an already-expired JWT must return 401."""
+    from app.core.auth import create_access_token
+
+    expired_token = create_access_token({"sub": str(pcp_user.user_id), "role": "PCP"}, expires_delta_seconds=-1)
+    response = await client.get(
+        "/api/v1/patients/1",
+        headers={"Authorization": f"Bearer {expired_token}"},
+    )
+    assert response.status_code == 401
+
+
+async def test_malformed_token_returns_401(client, pcp_user):
+    """A request with a garbage Bearer token must return 401."""
+    response = await client.get(
+        "/api/v1/patients/1",
+        headers={"Authorization": "Bearer this.is.not.a.valid.jwt"},
+    )
+    assert response.status_code == 401
+
+
 async def test_login_accepts_form_encoded_body(client, pcp_user):
     """Endpoint must accept application/x-www-form-urlencoded (OAuth2 standard)."""
     response = await client.post(

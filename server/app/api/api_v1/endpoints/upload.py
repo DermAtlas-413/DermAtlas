@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.deps import require_pcp
 from app.db import get_db
+from app.models.audit_log import AuditLog
 from app.models.clinical_image import ClinicalImage
 from app.models.patient import Patient
 from app.models.user import User
@@ -77,6 +78,13 @@ async def upload_image(
         clinician_notes=clinician_notes,
     )
     db.add(image)
+    db.add(
+        AuditLog(
+            user_id=current_user.user_id,
+            action="UPLOAD",
+            target_resource=f"image:{query_id}",
+        )
+    )
     await db.flush()
 
     return {"query_id": query_id}

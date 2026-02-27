@@ -120,6 +120,30 @@ async def test_feedback_missing_is_helpful_returns_422(
     assert response.status_code == 422
 
 
+async def test_feedback_missing_query_id_returns_422(
+    client, pcp_token, reference_image
+):
+    payload = {
+        "reference_id": str(reference_image.reference_id),
+        "is_helpful": True,
+        # query_id omitted
+    }
+    response = await client.post(FEEDBACK_URL, json=payload, headers=pcp_token)
+    assert response.status_code == 422
+
+
+async def test_feedback_missing_reference_id_returns_422(
+    client, pcp_token, clinical_image
+):
+    payload = {
+        "query_id": str(clinical_image.query_id),
+        "is_helpful": True,
+        # reference_id omitted
+    }
+    response = await client.post(FEEDBACK_URL, json=payload, headers=pcp_token)
+    assert response.status_code == 422
+
+
 async def test_feedback_for_other_physicians_query_returns_403(
     client, other_pcp_token, clinical_image, reference_image
 ):
