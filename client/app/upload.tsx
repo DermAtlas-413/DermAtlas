@@ -22,7 +22,9 @@ export default function Upload() {
           {/* Top Bar */}
           <View style={styles.topBar}>
             <Text style={styles.backArrow}>‹</Text>
-            <Text style={styles.doctor}>Dr. Quach (PCP)</Text>
+            <Pressable onPress={() => router.push("/profile")}>
+              <Text style={styles.doctor}>Dr. Quach (PCP)</Text>
+            </Pressable>
             <Pressable onPress={() => router.replace("/")}>
               <Text style={styles.logout}>Logout</Text>
             </Pressable>

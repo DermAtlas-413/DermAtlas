@@ -35,7 +35,9 @@ export default function Compare() {
               <Text style={styles.backArrow}>‹</Text>
             </Pressable>
 
-            <Text style={styles.doctor}>Dr. Quach (PCP)</Text>
+            <Pressable onPress={() => router.push("/profile")}>
+              <Text style={styles.doctor}>Dr. Quach (PCP)</Text>
+            </Pressable>
 
             <Pressable onPress={() => router.replace("/")} style={styles.logoutBtn}>
               <Text style={styles.logout}>Logout</Text>
