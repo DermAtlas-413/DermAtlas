@@ -1,293 +1,176 @@
-
 # React Native + Web Hybrid (Expo) Coding Style & Project Structure
 
-This document defines a **consistent, predictable** coding style and file/directory structure for an **Expo** app that runs on **iOS, Android, and Web** from the same codebase.
+This guide defines a **consistent, predictable** coding style for the DermAtlas `client/` app using Expo for **iOS, Android, and Web**.
 
 ---
 
-# 1. Core Principles
+## 1. Core Principles
 
-1. **Single Codebase**
-   - One Expo project must support **mobile and web**.
-   - Avoid platform‑specific forks unless necessary.
+1. **Single Expo codebase**
+   - One app must run on iOS, Android, and Web.
+   - Use platform-specific files only when necessary (`.ios`, `.android`, `.web`).
 
-2. **Feature-Based Architecture**
-   - Business logic should live inside feature modules.
-   - Screens orchestrate features rather than implementing logic.
+2. **Thin routing, reusable UI**
+   - Keep `app/` route files focused on routing/screen composition.
+   - Move reusable UI into `components/` and `components/ui/`.
 
-3. **Strict Separation of Concerns**
-   - UI components never call APIs directly.
-   - Screens coordinate features.
-   - Services manage API/storage.
+3. **Separation of concerns**
+   - UI components should not contain backend/network logic.
+   - Hooks hold reusable logic.
+   - Services (when added) handle API/storage access.
 
-4. **Predictable Code Generation**
-   - All code follows the same naming conventions and folder placement.
-   - AI agents must not create ad-hoc directories.
+4. **Predictable file placement**
+   - Do not create ad-hoc top-level folders.
+   - Follow the directory rules below so AI-generated code lands in expected places.
 
-5. **TypeScript Everywhere**
-   - Use TypeScript for all files.
-   - Avoid `any`. If unavoidable, include a comment explaining why.
+5. **TypeScript-first**
+   - Use TypeScript for all new app code.
+   - Avoid `any`; if needed, add a short justification comment.
 
 ---
 
-# 2. Technology Stack
+## 2. Technology Stack (Current)
 
-Required technologies:
-
-- Expo (Managed Workflow)
+- Expo (managed workflow)
 - React Native
 - React Native Web
 - Expo Router
 - TypeScript
 - ESLint
-- Prettier
 
-Recommended technologies:
-
-- TanStack Query (API state management)
-- Zustand (lightweight client state)
-- React Hook Form (forms)
-- Zod (validation)
+Optional additions (only if introduced intentionally):
+- TanStack Query
+- Zustand
+- React Hook Form
+- Zod
 
 ---
 
-# 3. Project Directory Structure
+## 3. Project Directory Structure (Current + Allowed)
 
-Top-level structure:
+Use this structure under `client/`:
 
-```
-project-root/
-│
-├── app/                    # Expo Router pages (thin routing layer)
-│
-├── src/
-│   ├── features/           # Feature modules
-│   ├── components/         # Shared reusable components
-│   ├── ui/                 # Design system primitives
-│   ├── hooks/              # Shared hooks
-│   ├── services/           # API clients & backend interactions
-│   ├── state/              # Global state stores
-│   ├── theme/              # Design tokens (colors, spacing, fonts)
-│   ├── utils/              # Pure utility functions
-│   ├── types/              # Shared TypeScript types
-│   ├── config/             # Environment configuration
-│   └── assets/             # Images, icons, fonts
-│
-├── tests/                  # Unit and integration tests
-├── docs/                   # Internal project documentation
-│
-├── package.json
-├── tsconfig.json
-├── babel.config.js
-└── app.json
-```
-
----
-
-# 4. Routing Structure (Expo Router)
-
-The `app/` directory contains **only routing logic**.
-
-Example:
-
-```
-app/
-│
-├── _layout.tsx
-│
-├── (auth)/
+```text
+client/
+├── app/                      # Expo Router routes/screens
 │   ├── _layout.tsx
-│   └── sign-in.tsx
-│
-├── (tabs)/
-│   ├── _layout.tsx
+│   ├── index.tsx
 │   ├── upload.tsx
 │   ├── compare.tsx
 │   ├── feedback.tsx
-│   └── profile.tsx
-│
-└── +not-found.tsx
+│   ├── profile.tsx
+│   └── modal.tsx
+├── assets/
+│   └── images/
+├── components/               # Shared components
+│   ├── ui/                   # Low-level UI primitives
+│   └── *.tsx
+├── constants/
+│   └── theme.ts              # Theme tokens/constants
+├── hooks/                    # Shared hooks
+│   ├── use-color-scheme.ts
+│   ├── use-color-scheme.web.ts
+│   └── use-theme-color.ts
+├── scripts/
+├── types/                    # (Add as needed) shared TS types
+├── services/                 # (Add as needed) API/storage logic
+├── state/                    # (Add as needed) global state stores
+└── utils/                    # (Add as needed) pure helpers
 ```
 
 Rules:
+- Keep existing top-level structure intact.
+- New shared code should go into `components`, `hooks`, `services`, `state`, `types`, or `utils`.
+- Do **not** introduce `src/` for this project.
 
-- Route files should remain **very small**
-- They should **import a feature screen** and render it
+---
+
+## 4. Routing Conventions (Expo Router)
+
+`app/` files define route paths. Keep them small.
+
+- Route filenames: lowercase or kebab-case based on URL intent.
+- `_layout.tsx` manages shared navigation/layout.
+- Route modules should orchestrate components/hooks, not contain heavy business logic.
 
 Example:
+```tsx
+import UploadScreen from "@/components/upload-screen"
 
-```
-import { UploadScreen } from "@/features/upload/screens/UploadScreen"
-
-export default UploadScreen
+export default function UploadRoute() {
+  return <UploadScreen />
+}
 ```
 
 ---
 
-# 5. Feature Module Structure
+## 5. Component Layers
 
-Each feature lives inside:
-
-```
-src/features/<feature-name>/
-```
-
-Example:
-
-```
-src/features/upload/
-│
-├── screens/
-│   └── UploadScreen.tsx
-│
-├── components/
-│   ├── ImageUploader.tsx
-│   └── UploadPreview.tsx
-│
-├── hooks/
-│   └── useUploadImage.ts
-│
-├── services/
-│   └── uploadService.ts
-│
-├── types.ts
-└── index.ts
-```
-
-Rules:
-
-- **Screens** compose feature components
-- **Components** handle UI only
-- **Hooks** contain logic
-- **Services** handle API calls
-
----
-
-# 6. UI Component Layers
-
-Three UI layers exist.
-
-## 1. Design System (src/ui)
-
-Reusable primitives.
+### A) `components/ui/` (primitive UI)
+Reusable, feature-agnostic building blocks.
 
 Examples:
+- `icon-symbol.tsx`
+- `collapsible.tsx`
 
-```
-src/ui/
-├── Button.tsx
-├── Card.tsx
-├── TextField.tsx
-├── Avatar.tsx
-└── Icon.tsx
-```
-
-Rules:
-
-- Must be completely **feature-agnostic**
-- Must support **web and native**
-
----
-
-## 2. Shared Components (src/components)
-
-Reusable but higher-level UI.
-
-Example:
-
-```
-src/components/
-├── Header.tsx
-├── PageContainer.tsx
-├── ImageGrid.tsx
-└── ModalDialog.tsx
-```
-
----
-
-## 3. Feature Components
-
-Located inside features.
-
-Example:
-
-```
-features/upload/components/
-``
-
-These should only be reused within that feature.
-
----
-
-# 7. Naming Conventions
-
-## Files
-
-Use **PascalCase** for components.
+### B) `components/` (shared composed components)
+Reusable components composed from UI primitives.
 
 Examples:
+- `parallax-scroll-view.tsx`
+- `themed-text.tsx`
+- `themed-view.tsx`
 
-```
-UploadScreen.tsx
-UserAvatar.tsx
-ImageUploader.tsx
+### C) Route-local UI
+If only one route uses it, keep it close to that route until reuse appears.
+
+---
+
+## 6. Naming Conventions
+
+Match current repository style:
+
+- **Files:** kebab-case for most files (`parallax-scroll-view.tsx`, `use-theme-color.ts`)
+- **React component names:** PascalCase exports (`ParallaxScrollView`)
+- **Hooks:** must start with `use` (`use-theme-color.ts`)
+- **Platform files:** allowed where needed
+  - `*.ios.tsx`
+  - `*.android.tsx`
+  - `*.web.ts` / `*.web.tsx`
+
+---
+
+## 7. Import Rules
+
+- Prefer configured alias imports (e.g. `@/`) where available.
+- Otherwise use short relative imports.
+- Avoid very deep relative chains when an alias exists.
+
+Good:
+```ts
+import { ThemedView } from "@/components/themed-view"
 ```
 
-Hooks must begin with `use`:
-
-```
-useAuth.ts
-useUploadImage.ts
-```
-
-Service files:
-
-```
-authService.ts
-imageService.ts
+Avoid:
+```ts
+import { ThemedView } from "../../../components/themed-view"
 ```
 
 ---
 
-# 8. Import Rules
+## 8. Component File Structure
 
-Use **absolute imports with aliases**.
+Use this order:
 
-Example:
-
-```
-import { Button } from "@/ui/Button"
-import { useAuth } from "@/features/auth/hooks/useAuth"
-```
-
-Never use deep relative paths:
-
-```
-../../../components/Button
-```
-
----
-
-# 9. Component Structure
-
-Standard component layout:
-
-```
-imports
-
-types
-
-component
-
-styles
-
-export
-```
+1. Imports
+2. Types/Props
+3. Component
+4. Styles
+5. Export
 
 Example:
-
-```
-import { View, Text } from "react-native"
+```tsx
+import { StyleSheet, Text, View } from "react-native"
 
 type Props = {
   title: string
@@ -295,225 +178,87 @@ type Props = {
 
 export function Header({ title }: Props) {
   return (
-    <View>
+    <View style={styles.container}>
       <Text>{title}</Text>
     </View>
   )
 }
-```
 
----
-
-# 10. Styling Rules
-
-Use React Native StyleSheet or Tailwind (if configured).
-
-Preferred:
-
-```
-StyleSheet.create()
-```
-
-Example:
-
-```
 const styles = StyleSheet.create({
   container: {
-    padding: 16
-  }
+    padding: 16,
+  },
 })
 ```
 
-Rules:
-
-- Avoid inline styles
-- Use theme tokens when possible
-
 ---
 
-# 11. Theme System
+## 9. Styling Rules
 
-Theme tokens live in:
-
-```
-src/theme/
-```
-
-Example:
-
-```
-src/theme/
-├── colors.ts
-├── spacing.ts
-├── typography.ts
-└── index.ts
-```
-
-Example usage:
-
-```
-import { colors } from "@/theme/colors"
-```
-
----
-
-# 12. Services Layer
-
-All backend communication must go through `services/`.
-
-Example:
-
-```
-src/services/
-├── apiClient.ts
-├── authService.ts
-└── imageService.ts
-```
-
-Example:
-
-```
-export async function uploadImage(file: File) {
-  return api.post("/images", file)
-}
-```
+Preferred approach:
+- `StyleSheet.create(...)`
+- Theme-aware wrappers/hooks (`themed-*`, `use-theme-color`)
+- Tokens from `constants/theme.ts`
 
 Rules:
-
-- UI must **never call fetch directly**
-- All requests go through service functions
-
----
-
-# 13. Global State
-
-Global state lives in:
-
-```
-src/state/
-```
-
-Example:
-
-```
-authStore.ts
-settingsStore.ts
-```
-
-Use Zustand or similar minimal state libraries.
+- Avoid large inline style objects.
+- Use consistent spacing and color tokens.
+- Keep styles in the same file unless shared by multiple components.
 
 ---
 
-# 14. Hooks
+## 10. Theme & Color Usage
 
-Shared hooks live in:
+Theme source:
+- `constants/theme.ts`
+- `hooks/use-theme-color.ts`
+- `components/themed-text.tsx`
+- `components/themed-view.tsx`
 
-```
-src/hooks/
-```
-
-Examples:
-
-```
-useDebounce.ts
-useDeviceType.ts
-useTheme.ts
-```
-
-Feature-specific hooks must live inside their feature.
+Guidelines:
+- Reuse existing theme utilities first.
+- Do not hardcode colors when theme tokens already exist.
+- Ensure dark/light behavior remains consistent on mobile and web.
 
 ---
 
-# 15. Type Definitions
+## 11. Logic, Services, and State
 
-Shared types go in:
-
-```
-src/types/
-```
-
-Example:
-
-```
-User.ts
-ImageCase.ts
-ApiResponse.ts
-```
-
-Feature-specific types stay inside the feature.
+- Shared logic belongs in hooks (`hooks/`) or utilities (`utils/`).
+- Backend/API access should go in `services/` once introduced.
+- Global state (if needed) should go in `state/` and remain minimal.
 
 ---
 
-# 16. Testing
+## 12. Testing
 
-Tests live in:
-
-```
-tests/
-```
-
-Structure:
-
-```
-tests/
-├── features/
-├── components/
-└── utils/
-```
-
-Testing tools:
-
-- Jest
-- React Native Testing Library
+When tests are added:
+- Co-locate small tests next to files or use a dedicated test folder.
+- Prefer React Native Testing Library patterns for UI behavior.
+- Test behavior and rendering, not implementation details.
 
 ---
 
-# 17. AI Agent Rules
+## 13. AI Agent Rules (Mandatory)
 
-AI agents generating code must follow these rules:
+AI-generated code must:
 
-1. Do not create new root directories.
-2. Always place feature code inside `src/features`.
-3. UI primitives must go in `src/ui`.
-4. Network calls must go through `services`.
-5. Hooks must start with `use`.
-6. Route files must stay thin.
-7. Prefer composition over large components.
-
----
-
-# 18. Example End-to-End Flow
-
-User uploads an image.
-
-Flow:
-
-```
-Screen
-   ↓
-Feature Hook
-   ↓
-Service
-   ↓
-API
-```
-
-Example:
-
-```
-UploadScreen
-   → useUploadImage
-       → uploadService.uploadImage()
-           → apiClient.post()
-```
+1. Respect the existing `client/` folder structure.
+2. Keep route files in `app/` concise.
+3. Place reusable UI in `components/` or `components/ui/`.
+4. Put shared logic in `hooks/` (or `utils/` for pure functions).
+5. Use TypeScript and avoid `any` unless justified.
+6. Follow existing file naming style (kebab-case + platform suffixes).
+7. Use theme utilities/tokens instead of hardcoded styling.
+8. Avoid creating new root-level architecture patterns without explicit request.
 
 ---
 
-# 19. Summary
+## 14. Summary
 
-This architecture ensures:
+This style guide keeps DermAtlas consistent across Expo mobile + web by:
 
-- predictable AI-generated code
-- maintainable scaling
-- separation of UI, logic, and backend
-- consistent developer experience
+- preserving current project conventions,
+- enforcing predictable file placement,
+- separating routing, UI, and logic,
+- and ensuring AI-generated code matches the existing codebase.
