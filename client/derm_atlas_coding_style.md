@@ -36,11 +36,12 @@ This guide defines a **consistent, predictable** coding style for the DermAtlas 
 - React Native Web
 - Expo Router
 - TypeScript
+- **React Compiler** (auto-memoization — see Section 11)
 - ESLint
 
 Optional additions (only if introduced intentionally):
 - TanStack Query
-- Zustand
+- Zustand (for global/shared state only — see Section 11)
 - React Hook Form
 - Zod
 
@@ -222,7 +223,30 @@ Guidelines:
 
 ---
 
-## 11. Logic, Services, and State
+## 11. State Management & React Compiler
+
+### React Compiler
+This project uses **React Compiler**, which automatically handles memoization at build time.
+
+This means:
+- **Do not** manually write `useMemo`, `useCallback`, or `React.memo` — the compiler handles these automatically and manual usage is redundant.
+- Local component state is managed with standard React hooks (`useState`, `useReducer`) as usual. The compiler optimizes *rendering*, not state itself.
+- Write components and hooks naturally and idiomatically; let the compiler optimize them.
+
+To avoid breaking compiler optimizations, follow the [Rules of React](https://react.dev/reference/rules) strictly — no mutation of props or state, no side effects outside of `useEffect`.
+
+### Global / Shared State
+React Compiler does not manage state that needs to be **shared across multiple unrelated screens or components** (e.g. authenticated user session, a selected image persisted across navigation). For those cases, **Zustand** is the preferred solution if global state becomes necessary.
+
+Guidelines:
+- Default to local `useState`/`useReducer` for component-scoped state.
+- Lift state up through props or context for moderately shared state.
+- Reach for Zustand (in `state/`) only when state genuinely needs to be global and prop-drilling or context becomes unwieldy.
+- Keep Zustand stores minimal and focused — one store per domain concern.
+
+---
+
+## 12. Logic, Services, and State
 
 - Shared logic belongs in hooks (`hooks/`) or utilities (`utils/`).
 - Backend/API access should go in `services/` once introduced.
@@ -230,7 +254,7 @@ Guidelines:
 
 ---
 
-## 12. Testing
+## 13. Testing
 
 When tests are added:
 - Co-locate small tests next to files or use a dedicated test folder.
@@ -239,7 +263,7 @@ When tests are added:
 
 ---
 
-## 13. AI Agent Rules (Mandatory)
+## 14. AI Agent Rules (Mandatory)
 
 AI-generated code must:
 
@@ -251,14 +275,17 @@ AI-generated code must:
 6. Follow existing file naming style (kebab-case + platform suffixes).
 7. Use theme utilities/tokens instead of hardcoded styling.
 8. Avoid creating new root-level architecture patterns without explicit request.
+9. **Do not** write `useMemo`, `useCallback`, or `React.memo` — React Compiler handles memoization automatically.
+10. Default to local React state; only introduce Zustand if global state is explicitly required.
 
 ---
 
-## 14. Summary
+## 15. Summary
 
 This style guide keeps DermAtlas consistent across Expo mobile + web by:
 
 - preserving current project conventions,
 - enforcing predictable file placement,
 - separating routing, UI, and logic,
+- leveraging React Compiler to eliminate manual memoization boilerplate,
 - and ensuring AI-generated code matches the existing codebase.
