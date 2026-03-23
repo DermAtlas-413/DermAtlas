@@ -251,16 +251,19 @@ def process_isic2020(path: str) -> pd.DataFrame:
 
     df = df.rename(columns={"image_name": "image_id"})
 
-    # Map diagnosis
+    # Map diagnosis (None = unknown/unmappable → keep as all-zero row)
     df["class_name"] = (
         df["diagnosis"].str.strip().str.lower()
         .map(ISIC2020_LABEL_MAP)
     )
-    before = len(df)
-    df = df[df["class_name"].notna()].copy()
-    print(f"  Dropped {before - len(df)} unmappable rows → {len(df)} remaining")
 
-    # One-hot
+    # Count how many are unknown vs mappable
+    n_unknown   = df["class_name"].isna().sum()
+    n_mappable  = df["class_name"].notna().sum()
+    print(f"  Mappable (labeled):  {n_mappable}")
+    print(f"  Unknown (all-zero):  {n_unknown}")
+
+    # One-hot: unknown rows get all 0s (no class assigned)
     for cls in TARGET_CLASSES:
         df[cls] = (df["class_name"] == cls).astype(int)
 
@@ -293,11 +296,12 @@ def validate(df: pd.DataFrame):
         print("  ✓ No null values")
 
     row_sums = df[TARGET_CLASSES].sum(axis=1)
-    bad = (row_sums != 1).sum()
+    bad = ((row_sums != 1) & (row_sums != 0)).sum()
+    n_zero = (row_sums == 0).sum()
     if bad > 0:
-        print(f"  ⚠️  {bad} rows don't sum to 1")
+        print(f"  ⚠️  {bad} rows don't sum to 0 or 1")
     else:
-        print("  ✓ All rows sum to exactly 1")
+        print(f"  ✓ All rows valid  ({n_zero} unknown all-zero rows, {len(df)-n_zero} labeled rows)")
 
     dups = df["image_id"].duplicated().sum()
     if dups > 0:
@@ -360,9 +364,12 @@ def main():
     print(f"  Combined: {len(unified)} rows")
 
     # Derive malignant column from one-hot classes
-    unified["malignant"] = unified[TARGET_CLASSES].apply(
-        lambda row: MALIGNANT_MAP[TARGET_CLASSES[row.values.argmax()]], axis=1
-    )
+    # Rows with all-zero labels (unknown ISIC 2020) → malignant=0 (confirmed benign)
+    def get_malignant(row):
+        if row[TARGET_CLASSES].sum() == 0:
+            return 0  # unknown but confirmed benign
+        return MALIGNANT_MAP[TARGET_CLASSES[row[TARGET_CLASSES].values.argmax()]]
+    unified["malignant"] = unified.apply(get_malignant, axis=1)
 
     # Safety dedup (should already be clean)
     before  = len(unified)
