@@ -1,13 +1,19 @@
 """
 Generate 1408-D embeddings for all images using Vertex AI multimodalembedding@001.
 
-Reads unified_metadata.csv and generates embeddings for ~24k images in parallel.
-Automatically uploads to GCS and removes local copies (GCS is source of truth).
+Reads unified_metadata.csv (57,773 rows across HAM10000, ISIC 2019, ISIC 2020)
+and generates embeddings in parallel. Uses source_dataset column to route each
+image to the correct GCS path. Automatically uploads to GCS and removes local copies.
 
 Output (uploaded to gs://dermatlas-ml-data/processed/):
-  - embeddings.npy (24647, 1408) - embedding vectors
-  - labels.npy (24647, 6) - one-hot encoded labels
-  - image_ids.npy (24647,) - image identifiers (preserves row-to-image mapping)
+  - embeddings.npy (N, 1408) - embedding vectors
+  - labels.npy (N, 6)        - one-hot encoded labels
+  - image_ids.npy (N,)       - image identifiers (preserves row-to-image mapping)
+
+GCS image locations by dataset:
+  ham10000  -> raw/HAM10000/HAM10000/HAM10000_images_part_{1,2}/
+  isic2019  -> raw/ISIC/ISIC/ISIC_2019_Training_Input/ISIC_2019_Training_Input/
+  isic2020  -> raw/ISIC2020/train-image/image/
 
 Usage:
     python pipeline/scripts/generate_embeddings.py
@@ -47,6 +53,7 @@ GCS_BUCKET = "dermatlas-ml-data"
 HAM10000_IMAGE_PREFIX_1 = "raw/HAM10000/HAM10000/HAM10000_images_part_1"
 HAM10000_IMAGE_PREFIX_2 = "raw/HAM10000/HAM10000/HAM10000_images_part_2"
 ISIC_2019_IMAGE_PREFIX = "raw/ISIC/ISIC/ISIC_2019_Training_Input/ISIC_2019_Training_Input"
+ISIC_2020_IMAGE_PREFIX = "raw/ISIC2020/train-image/image"
 
 TARGET_CLASSES = ["mel", "nv", "bcc", "akiec", "bkl", "df"]
 
@@ -158,32 +165,29 @@ def build_ham10000_location_cache():
     return cache
 
 
-def construct_gcs_uri(image_id: str, ham_cache: dict, bucket: str = GCS_BUCKET) -> str:
+def construct_gcs_uri(image_id: str, source_dataset: str, ham_cache: dict, bucket: str = GCS_BUCKET) -> str:
     """
-    Construct GCS URI for an image.
-
-    Logic:
-    - If image_id starts with "ISIC_", it's from ISIC 2019
-    - Otherwise, it's from HAM10000 (look up folder in cache)
+    Construct GCS URI for an image using the source_dataset column.
 
     Args:
         image_id: Image identifier (without extension)
-        ham_cache: Precomputed mapping of HAM10000 image_id -> folder
+        source_dataset: One of 'ham10000', 'isic2019', 'isic2020'
+        ham_cache: Precomputed mapping of HAM10000 image_id -> folder prefix
         bucket: GCS bucket name
 
     Returns:
         Full gs:// URI to the image
     """
-    if image_id.startswith("ISIC_"):
+    if source_dataset == "isic2019":
         return f"gs://{bucket}/{ISIC_2019_IMAGE_PREFIX}/{image_id}.jpg"
-    else:
-        # Look up which HAM10000 folder contains this image
+    elif source_dataset == "isic2020":
+        return f"gs://{bucket}/{ISIC_2020_IMAGE_PREFIX}/{image_id}.jpg"
+    else:  # ham10000
         if image_id in ham_cache:
             folder_prefix = ham_cache[image_id]
             return f"gs://{bucket}/{folder_prefix}/{image_id}.jpg"
         else:
-            # Fallback: try part_1 (will fail if not there)
-            print(f"⚠️  {image_id} not found in cache, trying part_1")
+            print(f"⚠️  {image_id} not found in HAM cache, trying part_1")
             return f"gs://{bucket}/{HAM10000_IMAGE_PREFIX_1}/{image_id}.jpg"
 
 
@@ -261,7 +265,8 @@ def load_checkpoint(output_dir: Path) -> tuple:
 def process_single_image(row, model, ham_cache):
     """Process a single image and return results."""
     image_id = row['image_id']
-    gcs_uri = construct_gcs_uri(image_id, ham_cache)
+    source_dataset = row['source_dataset']
+    gcs_uri = construct_gcs_uri(image_id, source_dataset, ham_cache)
     embedding = generate_embedding(model, gcs_uri)
 
     if embedding is not None:
@@ -289,16 +294,16 @@ def main():
     print("=" * 60)
 
     # Load metadata
-    print("\n[1/4] Loading metadata...")
+    print("\n[1/6] Loading metadata...")
     df = load_metadata(args.metadata)
 
     # Build HAM10000 location cache
-    print("\n[2/5] Building HAM10000 image location cache...")
+    print("\n[2/6] Building HAM10000 image location cache...")
     global _ham10000_location_cache
     _ham10000_location_cache = build_ham10000_location_cache()
 
     # Initialize Vertex AI
-    print("\n[3/5] Initializing Vertex AI...")
+    print("\n[3/6] Initializing Vertex AI...")
     model = initialize_vertex_ai()
 
     # Load checkpoint if resuming
@@ -308,7 +313,7 @@ def main():
     processed_ids = set()
 
     if args.resume:
-        print("\n[4/5] Loading checkpoint...")
+        print("\n[4/6] Loading checkpoint...")
         emb_checkpoint, labels_checkpoint, processed_ids = load_checkpoint(output_dir)
 
         if emb_checkpoint is not None:
@@ -321,7 +326,7 @@ def main():
     unprocessed_df = df[~df['image_id'].isin(processed_ids)].copy()
 
     # Generate embeddings in parallel
-    print(f"\n[4/5] Generating embeddings for {len(unprocessed_df)} images...")
+    print(f"\n[4/6] Generating embeddings for {len(unprocessed_df)} images...")
     print(f"Using {args.workers} parallel workers")
 
     failed_images = []
@@ -360,7 +365,7 @@ def main():
                 pbar.update(1)
 
     # Convert to numpy arrays
-    print("\n[5/5] Finalizing...")
+    print("\n[5/6] Finalizing...")
     embeddings = np.array(embeddings_list, dtype=np.float32)
     labels = np.array(labels_list, dtype=np.float32)
 
