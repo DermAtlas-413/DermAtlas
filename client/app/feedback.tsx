@@ -8,14 +8,23 @@ import {
   Dimensions,
   ScrollView,
   Platform,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { submitFeedback } from "../lib/api";
 
 type Slide = { key: string; label: string };
 
 export default function Feedback() {
   const router = useRouter();
-  const { matchId } = useLocalSearchParams<{ matchId?: string }>();
+  const { matchId, queryId, referenceId, diagnosis, similarity } =
+    useLocalSearchParams<{
+      matchId?: string;
+      queryId?: string;
+      referenceId?: string;
+      diagnosis?: string;
+      similarity?: string;
+    }>();
 
   const slides: Slide[] = useMemo(
     () => [
@@ -28,6 +37,23 @@ export default function Feedback() {
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [vote, setVote] = useState<"up" | "down" | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleVote(direction: "up" | "down") {
+    const next = vote === direction ? null : direction;
+    setVote(next);
+    if (next === null) return; // toggled off — no API call
+    if (!queryId || !referenceId) return; // params not available yet
+    setSubmitting(true);
+    try {
+      await submitFeedback(queryId, referenceId, next === "up");
+    } catch {
+      Alert.alert("Error", "Failed to submit feedback. Please try again.");
+      setVote(vote); // revert
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   const W = Dimensions.get("window").width;
   const CARD_PAD = 22;
@@ -131,10 +157,14 @@ export default function Feedback() {
 
           <View style={styles.pills}>
             <View style={styles.diagPill}>
-              <Text style={styles.pillText}>Diagnosis: ____________</Text>
+              <Text style={styles.pillText}>
+                Diagnosis: {diagnosis ?? "____________"}
+              </Text>
             </View>
             <View style={styles.simPill}>
-              <Text style={styles.pillText}>__ % Similarity</Text>
+              <Text style={styles.pillText}>
+                {similarity != null ? `${similarity}% Similarity` : "__ % Similarity"}
+              </Text>
             </View>
           </View>
 
@@ -146,7 +176,8 @@ export default function Feedback() {
             <View style={styles.voteRow}>
               <Pressable
                 style={[styles.voteBtn, vote === "up" && styles.voteBtnActive]}
-                onPress={() => setVote(vote === "up" ? null : "up")}
+                onPress={() => handleVote("up")}
+                disabled={submitting}
               >
                 <Text style={styles.voteIcon}>👍</Text>
                 <Text style={styles.voteLabel}>Helpful</Text>
@@ -154,12 +185,19 @@ export default function Feedback() {
 
               <Pressable
                 style={[styles.voteBtn, vote === "down" && styles.voteBtnActive]}
-                onPress={() => setVote(vote === "down" ? null : "down")}
+                onPress={() => handleVote("down")}
+                disabled={submitting}
               >
                 <Text style={styles.voteIcon}>👎</Text>
                 <Text style={styles.voteLabel}>Not Helpful</Text>
               </Pressable>
             </View>
+
+            {submitting ? (
+              <Text style={styles.submittingText}>Saving…</Text>
+            ) : vote !== null ? (
+              <Text style={styles.submittedText}>Feedback recorded</Text>
+            ) : null}
           </View>
         </View>
       </View>
@@ -302,4 +340,6 @@ const styles = StyleSheet.create({
   },
   voteIcon: { fontSize: 26, marginBottom: 6 },
   voteLabel: { color: c.primary, fontWeight: "900" },
+  submittingText: { marginTop: 10, fontSize: 12, color: c.primary, fontWeight: "600" },
+  submittedText: { marginTop: 10, fontSize: 12, color: "#2C6A80", fontWeight: "700" },
 });

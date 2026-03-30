@@ -6,11 +6,35 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { getUser, clearAuth } from "../lib/api";
 
 export default function Profile() {
   const router = useRouter();
+  const user = getUser();
+
+  const displayName = user?.fullName ?? "—";
+  const displayUsername = user?.email ?? "—";
+  const displayRole = user?.role === "PCP" ? "PCP, Admin" : (user?.role ?? "—");
+
+  function handleLogout() {
+    clearAuth();
+    router.replace("/");
+  }
+
+  function handleChangePassword() {
+    Alert.alert("Change Password", "Password reset is not yet available in this version.");
+  }
+
+  function handleManageUsers() {
+    Alert.alert("Manage Users", "User management is not yet available in this version.");
+  }
+
+  function handleAuditLogs() {
+    Alert.alert("View Audit Logs", "Audit log viewer is not yet available in this version.");
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -22,7 +46,7 @@ export default function Profile() {
               <Text style={styles.backArrow}>‹</Text>
             </Pressable>
             <Text style={styles.doctorText}>Dr. Quach (PCP)</Text>
-            <Pressable onPress={() => router.replace("/")} style={styles.logoutBtn}>
+            <Pressable onPress={handleLogout} style={styles.logoutBtn}>
               <Text style={styles.logout}>Logout</Text>
             </Pressable>
           </View>
@@ -39,13 +63,13 @@ export default function Profile() {
             </View>
             <View style={styles.infoPills}>
               <View style={styles.infoPill}>
-                <Text style={styles.infoPillText}>Name: Nhi Quach</Text>
+                <Text style={styles.infoPillText}>Name: {displayName}</Text>
               </View>
               <View style={styles.infoPill}>
-                <Text style={styles.infoPillText}>Username: ntq1</Text>
+                <Text style={styles.infoPillText}>Username: {displayUsername}</Text>
               </View>
               <View style={styles.infoPillAlt}>
-                <Text style={styles.infoPillText}>Role: PCP, Admin</Text>
+                <Text style={styles.infoPillText}>Role: {displayRole}</Text>
               </View>
             </View>
           </View>
@@ -53,7 +77,7 @@ export default function Profile() {
           <View style={styles.divider} />
 
           {/* Change Password */}
-          <Pressable style={styles.menuRow} onPress={() => {}}>
+          <Pressable style={styles.menuRow} onPress={handleChangePassword}>
             <View style={styles.menuLeft}>
               <View style={styles.menuIconWrap}>
                 <Text style={styles.menuIcon}>🔒</Text>
@@ -70,7 +94,7 @@ export default function Profile() {
             <Text style={styles.sectionTitle}>Administrator Controls</Text>
           </View>
 
-          <Pressable style={styles.menuRow} onPress={() => {}}>
+          <Pressable style={styles.menuRow} onPress={handleManageUsers}>
             <View style={styles.menuLeft}>
               <View style={styles.menuIconWrap}>
                 <Text style={styles.menuIcon}>👤</Text>
@@ -82,7 +106,7 @@ export default function Profile() {
 
           <View style={styles.divider} />
 
-          <Pressable style={styles.menuRow} onPress={() => {}}>
+          <Pressable style={styles.menuRow} onPress={handleAuditLogs}>
             <View style={styles.menuLeft}>
               <View style={styles.menuIconWrap}>
                 <Text style={styles.menuIcon}>📋</Text>
@@ -95,7 +119,7 @@ export default function Profile() {
           <View style={styles.divider} />
 
           {/* Logout Button */}
-          <Pressable style={styles.logoutButton} onPress={() => router.replace("/")}>
+          <Pressable style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutButtonText}>Logout</Text>
           </Pressable>
         </View>
