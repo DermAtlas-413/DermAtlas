@@ -10,71 +10,15 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { getUser, clearAuth } from "../lib/api";
+import { useAuthStore } from "@/state/auth-store";
+import { DermAtlasColors as D } from "@/constants/theme";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 
-function MenuRow({
-  icon,
-  label,
-  sublabel,
-  onPress,
-  danger,
-}: {
-  icon: IconName;
-  label: string;
-  sublabel?: string;
-  onPress: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.menuRow,
-        pressed && styles.menuRowPressed,
-      ]}
-      onPress={onPress}
-    >
-      <View
-        style={[
-          styles.menuIconWrap,
-          danger && styles.menuIconWrapDanger,
-        ]}
-      >
-        <MaterialCommunityIcons
-          name={icon}
-          size={20}
-          color={danger ? "#E63946" : D.primary}
-        />
-      </View>
-      <View style={styles.menuTextWrap}>
-        <Text style={[styles.menuLabel, danger && styles.menuLabelDanger]}>
-          {label}
-        </Text>
-        {sublabel ? (
-          <Text style={styles.menuSublabel}>{sublabel}</Text>
-        ) : null}
-      </View>
-      <MaterialCommunityIcons
-        name="chevron-right"
-        size={20}
-        color={danger ? "#E63946" : D.muted}
-      />
-    </Pressable>
-  );
-}
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <View style={styles.sectionHeaderWrap}>
-      <Text style={styles.sectionHeaderText}>{title}</Text>
-    </View>
-  );
-}
-
 export default function Profile() {
   const router = useRouter();
-  const user = getUser();
+  const user = useAuthStore((s) => s.user);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
 
   const displayName = user?.fullName ?? "—";
   const displayUsername = user?.email ?? "—";
@@ -122,7 +66,7 @@ export default function Profile() {
       {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.headerBtn} onPress={() => router.back()}>
-          <MaterialCommunityIcons name="arrow-left" size={22} color="#fff" />
+          <MaterialCommunityIcons name="arrow-left" size={22} color={D.onPrimary} />
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Profile</Text>
@@ -208,14 +152,63 @@ export default function Profile() {
   );
 }
 
-const D = {
-  primary: "#0D6E8A",
-  bg: "#EEF6FA",
-  surface: "#FFFFFF",
-  border: "#B8D9E8",
-  text: "#1A3340",
-  muted: "#7A9EB0",
-};
+function MenuRow({
+  icon,
+  label,
+  sublabel,
+  onPress,
+  danger,
+}: {
+  icon: IconName;
+  label: string;
+  sublabel?: string;
+  onPress: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.menuRow,
+        pressed && styles.menuRowPressed,
+      ]}
+      onPress={onPress}
+    >
+      <View
+        style={[
+          styles.menuIconWrap,
+          danger && styles.menuIconWrapDanger,
+        ]}
+      >
+        <MaterialCommunityIcons
+          name={icon}
+          size={20}
+          color={danger ? D.danger : D.primary}
+        />
+      </View>
+      <View style={styles.menuTextWrap}>
+        <Text style={[styles.menuLabel, danger && styles.menuLabelDanger]}>
+          {label}
+        </Text>
+        {sublabel ? (
+          <Text style={styles.menuSublabel}>{sublabel}</Text>
+        ) : null}
+      </View>
+      <MaterialCommunityIcons
+        name="chevron-right"
+        size={20}
+        color={danger ? D.danger : D.muted}
+      />
+    </Pressable>
+  );
+}
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <View style={styles.sectionHeaderWrap}>
+      <Text style={styles.sectionHeaderText}>{title}</Text>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: D.bg },
@@ -232,20 +225,20 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: D.onPrimaryOverlay,
     alignItems: "center",
     justifyContent: "center",
   },
   headerCenter: { flex: 1, alignItems: "center" },
-  headerTitle: { color: "#fff", fontWeight: "700", fontSize: 17 },
-  headerSubtitle: { color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: "500" },
+  headerTitle: { color: D.onPrimary, fontWeight: "700", fontSize: 17 },
+  headerSubtitle: { color: D.onPrimaryMuted, fontSize: 11, fontWeight: "500" },
   headerBtnAlt: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: D.onPrimaryOverlay,
   },
-  headerBtnAltText: { color: "#fff", fontWeight: "600", fontSize: 13 },
+  headerBtnAltText: { color: D.onPrimary, fontWeight: "600", fontSize: 13 },
 
   scroll: { flexGrow: 1 },
   page: {
@@ -274,7 +267,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarInitials: { color: "#fff", fontWeight: "800", fontSize: 24 },
+  avatarInitials: { color: D.onPrimary, fontWeight: "800", fontSize: 24 },
   profileInfo: { flex: 1, gap: 4 },
   profileName: { color: D.text, fontSize: 17, fontWeight: "700" },
   profileBadges: { flexDirection: "row", gap: 6 },
@@ -321,14 +314,14 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: "#E0F0F7",
+    backgroundColor: D.infoSurface,
     alignItems: "center",
     justifyContent: "center",
   },
-  menuIconWrapDanger: { backgroundColor: "#FEE2E4" },
+  menuIconWrapDanger: { backgroundColor: D.dangerBg },
   menuTextWrap: { flex: 1, gap: 2 },
   menuLabel: { color: D.text, fontWeight: "600", fontSize: 15 },
-  menuLabelDanger: { color: "#E63946" },
+  menuLabelDanger: { color: D.danger },
   menuSublabel: { color: D.muted, fontSize: 12 },
   menuDivider: { height: 1, backgroundColor: D.border, marginLeft: 68 },
 });

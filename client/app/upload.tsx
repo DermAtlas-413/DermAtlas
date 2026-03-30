@@ -10,11 +10,13 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { getUser, clearAuth } from "../lib/api";
+import { useAuthStore } from "@/state/auth-store";
+import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Upload() {
   const router = useRouter();
-  const user = getUser();
+  const user = useAuthStore((s) => s.user);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
   const [patientId, setPatientId] = useState("");
 
   function handleLogout() {
@@ -41,7 +43,7 @@ export default function Upload() {
             <MaterialCommunityIcons
               name="account-circle-outline"
               size={22}
-              color="#fff"
+              color={D.onPrimary}
             />
           </Pressable>
           <Pressable style={styles.headerBtnAlt} onPress={handleLogout}>
@@ -146,7 +148,7 @@ export default function Upload() {
             ]}
             onPress={() => router.push("/compare")}
           >
-            <MaterialCommunityIcons name="send" size={18} color="#fff" />
+            <MaterialCommunityIcons name="send" size={18} color={D.onPrimary} />
             <Text style={styles.submitText}>Submit for Analysis</Text>
           </Pressable>
         </View>
@@ -154,15 +156,6 @@ export default function Upload() {
     </SafeAreaView>
   );
 }
-
-const D = {
-  primary: "#0D6E8A",
-  bg: "#EEF6FA",
-  surface: "#FFFFFF",
-  border: "#B8D9E8",
-  text: "#1A3340",
-  muted: "#7A9EB0",
-};
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: D.bg },
@@ -180,21 +173,21 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: D.onPrimaryOverlay,
     alignItems: "center",
     justifyContent: "center",
   },
   headerCenter: { flex: 1, alignItems: "center" },
-  headerTitle: { color: "#fff", fontWeight: "700", fontSize: 17 },
-  headerSubtitle: { color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: "500" },
+  headerTitle: { color: D.onPrimary, fontWeight: "700", fontSize: 17 },
+  headerSubtitle: { color: D.onPrimaryMuted, fontSize: 11, fontWeight: "500" },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerBtnAlt: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: D.onPrimaryOverlay,
   },
-  headerBtnAltText: { color: "#fff", fontWeight: "600", fontSize: 13 },
+  headerBtnAltText: { color: D.onPrimary, fontWeight: "600", fontSize: 13 },
 
   scroll: { flexGrow: 1 },
   page: {
@@ -280,7 +273,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 8,
-    backgroundColor: "#E0F0F7",
+    backgroundColor: D.infoSurface,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -304,5 +297,5 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   submitBtnPressed: { opacity: 0.85 },
-  submitText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  submitText: { color: D.onPrimary, fontSize: 16, fontWeight: "700" },
 });

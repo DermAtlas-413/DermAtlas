@@ -11,9 +11,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { setToken, setUser } from "../lib/api";
+import { login } from "@/services/auth-service";
+import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Index() {
   const [username, setUsername] = useState("");
@@ -110,23 +112,21 @@ export default function Index() {
                     styles.button,
                     pressed && styles.buttonPressed,
                   ]}
-                  onPress={() => {
-                    // Mock auth — swap for real login call when USE_MOCK = false
-                    setToken("mock-token");
-                    setUser({
-                      userId: "1",
-                      email: username || "clinician@hospital.com",
-                      fullName: username ? `Dr. ${username}` : "Dr. Quach",
-                      role: "PCP",
-                    });
-                    router.replace("/upload");
+                  onPress={async () => {
+                    try {
+                      await login(username, password);
+                      router.replace("/upload");
+                    } catch (e: unknown) {
+                      const msg = e instanceof Error ? e.message : "Login failed";
+                      Alert.alert("Sign In Failed", msg);
+                    }
                   }}
                 >
                   <Text style={styles.buttonText}>Sign In</Text>
                   <MaterialCommunityIcons
                     name="arrow-right"
                     size={20}
-                    color="#fff"
+                    color={D.onPrimary}
                   />
                 </Pressable>
 
@@ -153,15 +153,6 @@ export default function Index() {
   );
 }
 
-const D = {
-  primary: "#0D6E8A",
-  bg: "#EEF6FA",
-  surface: "#FFFFFF",
-  border: "#B8D9E8",
-  text: "#1A3340",
-  muted: "#7A9EB0",
-};
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: D.bg },
   scroll: { flexGrow: 1 },
@@ -178,7 +169,7 @@ const styles = StyleSheet.create({
     padding: 28,
     width: "100%",
     maxWidth: 440,
-    shadowColor: "#0D6E8A",
+    shadowColor: D.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -248,7 +239,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   buttonPressed: { opacity: 0.85 },
-  buttonText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
+  buttonText: { color: D.onPrimary, fontSize: 16, fontWeight: "700" },
 
   forgotWrap: { alignItems: "center" },
   forgotText: { color: D.primary, fontSize: 13, fontWeight: "600" },

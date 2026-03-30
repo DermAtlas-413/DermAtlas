@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -12,13 +12,16 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { submitFeedback, getUser } from "../lib/api";
+import { submitFeedback } from "@/services/feedback-service";
+import { useAuthStore } from "@/state/auth-store";
+import { DermAtlasColors as D } from "@/constants/theme";
 
 type Slide = { key: string; label: string };
 
 export default function Feedback() {
   const router = useRouter();
-  const user = getUser();
+  const user = useAuthStore((s) => s.user);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
   const { matchId, queryId, referenceId, diagnosis, similarity } =
     useLocalSearchParams<{
       matchId?: string;
@@ -28,14 +31,11 @@ export default function Feedback() {
       similarity?: string;
     }>();
 
-  const slides: Slide[] = useMemo(
-    () => [
-      { key: "1", label: `Match ${matchId ?? "1"}` },
-      { key: "2", label: `Alt View` },
-      { key: "3", label: `Close-up` },
-    ],
-    [matchId]
-  );
+  const slides: Slide[] = [
+    { key: "1", label: `Match ${matchId ?? "1"}` },
+    { key: "2", label: `Alt View` },
+    { key: "3", label: `Close-up` },
+  ];
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [vote, setVote] = useState<"up" | "down" | null>(null);
@@ -74,7 +74,7 @@ export default function Feedback() {
       {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.headerBtn} onPress={() => router.back()}>
-          <MaterialCommunityIcons name="arrow-left" size={22} color="#fff" />
+          <MaterialCommunityIcons name="arrow-left" size={22} color={D.onPrimary} />
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Similar Case · Match #{matchId ?? "—"}</Text>
@@ -90,12 +90,15 @@ export default function Feedback() {
             <MaterialCommunityIcons
               name="account-circle-outline"
               size={22}
-              color="#fff"
+              color={D.onPrimary}
             />
           </Pressable>
           <Pressable
             style={styles.headerBtnAlt}
-            onPress={() => router.replace("/")}
+            onPress={() => {
+              clearAuth();
+              router.replace("/");
+            }}
           >
             <Text style={styles.headerBtnAltText}>Logout</Text>
           </Pressable>
@@ -250,7 +253,7 @@ export default function Feedback() {
                 <MaterialCommunityIcons
                   name={vote === "up" ? "thumb-up" : "thumb-up-outline"}
                   size={24}
-                  color={vote === "up" ? "#fff" : D.primary}
+                  color={vote === "up" ? D.onPrimary : D.primary}
                 />
                 <Text
                   style={[
@@ -273,7 +276,7 @@ export default function Feedback() {
                 <MaterialCommunityIcons
                   name={vote === "down" ? "thumb-down" : "thumb-down-outline"}
                   size={24}
-                  color={vote === "down" ? "#fff" : D.muted}
+                  color={vote === "down" ? D.onPrimary : D.muted}
                 />
                 <Text
                   style={[
@@ -295,7 +298,7 @@ export default function Feedback() {
                 <MaterialCommunityIcons
                   name="check-circle-outline"
                   size={14}
-                  color="#10B981"
+                  color={D.success}
                 />
                 <Text style={styles.statusSuccess}>Feedback recorded</Text>
               </View>
@@ -306,15 +309,6 @@ export default function Feedback() {
     </SafeAreaView>
   );
 }
-
-const D = {
-  primary: "#0D6E8A",
-  bg: "#EEF6FA",
-  surface: "#FFFFFF",
-  border: "#B8D9E8",
-  text: "#1A3340",
-  muted: "#7A9EB0",
-};
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: D.bg },
@@ -332,14 +326,14 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: D.onPrimaryOverlay,
     alignItems: "center",
     justifyContent: "center",
   },
   headerCenter: { flex: 1, alignItems: "center" },
-  headerTitle: { color: "#fff", fontWeight: "700", fontSize: 17 },
+  headerTitle: { color: D.onPrimary, fontWeight: "700", fontSize: 17 },
   headerSubtitle: {
-    color: "rgba(255,255,255,0.75)",
+    color: D.onPrimaryMuted,
     fontSize: 11,
     fontWeight: "500",
   },
@@ -348,9 +342,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: D.onPrimaryOverlay,
   },
-  headerBtnAltText: { color: "#fff", fontWeight: "600", fontSize: 13 },
+  headerBtnAltText: { color: D.onPrimary, fontWeight: "600", fontSize: 13 },
 
   scroll: { flexGrow: 1 },
   page: {
@@ -471,12 +465,12 @@ const styles = StyleSheet.create({
     backgroundColor: D.bg,
   },
   voteBtnUp: { backgroundColor: D.primary, borderColor: D.primary },
-  voteBtnDown: { backgroundColor: "#E63946", borderColor: "#E63946" },
+  voteBtnDown: { backgroundColor: D.danger, borderColor: D.danger },
   voteLabel: { color: D.primary, fontWeight: "700", fontSize: 13 },
-  voteLabelActive: { color: "#fff" },
-  voteLabelDown: { color: "#fff" },
+  voteLabelActive: { color: D.onPrimary },
+  voteLabelDown: { color: D.onPrimary },
 
   statusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   statusText: { fontSize: 12, color: D.muted, fontWeight: "600" },
-  statusSuccess: { fontSize: 12, color: "#10B981", fontWeight: "600" },
+  statusSuccess: { fontSize: 12, color: D.success, fontWeight: "600" },
 });

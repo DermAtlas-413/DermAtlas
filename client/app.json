@@ -43,6 +43,10 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "apiBase": "http://localhost:8000/api/v1",
+      "useMock": true
     }
   }
 }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -6,75 +6,35 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { getUser } from "../lib/api";
-
-type Match = {
-  id: string;
-  similarity: number;
-  diagnosis: string;
-};
-
-const MOCK_MATCHES: Match[] = [
-  { id: "1", similarity: 87, diagnosis: "Seborrheic keratosis" },
-  { id: "2", similarity: 82, diagnosis: "Benign nevus" },
-  { id: "3", similarity: 78, diagnosis: "Actinic keratosis" },
-  { id: "4", similarity: 74, diagnosis: "Basal cell carcinoma" },
-];
-
-function SimilarityBar({ value }: { value: number }) {
-  const color =
-    value >= 85 ? "#10B981" : value >= 75 ? "#F59E0B" : "#E63946";
-  return (
-    <View style={bar.wrap}>
-      <View
-        style={[bar.fill, { width: `${value}%` as any, backgroundColor: color }]}
-      />
-    </View>
-  );
-}
-
-function SimilarityBadge({ value }: { value: number }) {
-  const color =
-    value >= 85 ? "#10B981" : value >= 75 ? "#F59E0B" : "#E63946";
-  const bg =
-    value >= 85 ? "#D1FAE5" : value >= 75 ? "#FEF3C7" : "#FEE2E2";
-  return (
-    <View style={[bar.badge, { backgroundColor: bg }]}>
-      <Text style={[bar.badgeText, { color }]}>{value}%</Text>
-    </View>
-  );
-}
-
-const bar = StyleSheet.create({
-  wrap: {
-    height: 4,
-    backgroundColor: "#E2EBF0",
-    borderRadius: 4,
-    marginVertical: 6,
-    overflow: "hidden",
-  },
-  fill: { height: "100%", borderRadius: 4 },
-  badge: {
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  badgeText: { fontSize: 11, fontWeight: "700" },
-});
+import { useAuthStore } from "@/state/auth-store";
+import { analyzeLesion } from "@/services/lesion-service";
+import type { AnalyzeMatch } from "@/types/api";
+import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Compare() {
   const router = useRouter();
-  const user = getUser();
+  const user = useAuthStore((s) => s.user);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+  const { queryId } = useLocalSearchParams<{ queryId?: string }>();
+  const [matches, setMatches] = useState<AnalyzeMatch[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    analyzeLesion(queryId ?? "mock")
+      .then((res) => setMatches(res.results))
+      .finally(() => setLoading(false));
+  }, [queryId]);
 
   return (
     <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.headerBtn} onPress={() => router.back()}>
-          <MaterialCommunityIcons name="arrow-left" size={22} color="#fff" />
+          <MaterialCommunityIcons name="arrow-left" size={22} color={D.onPrimary} />
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Analysis Results</Text>
@@ -90,12 +50,15 @@ export default function Compare() {
             <MaterialCommunityIcons
               name="account-circle-outline"
               size={22}
-              color="#fff"
+              color={D.onPrimary}
             />
           </Pressable>
           <Pressable
             style={styles.headerBtnAlt}
-            onPress={() => router.replace("/")}
+            onPress={() => {
+              clearAuth();
+              router.replace("/");
+            }}
           >
             <Text style={styles.headerBtnAltText}>Logout</Text>
           </Pressable>
@@ -152,19 +115,26 @@ export default function Compare() {
             <Text style={styles.sectionLabel}>
               Similar Cases &nbsp;
               <Text style={styles.sectionCount}>
-                {MOCK_MATCHES.length} matches
+                {matches.length} matches
               </Text>
             </Text>
+            {loading ? (
+              <ActivityIndicator size="large" color={D.primary} style={{ marginTop: 20 }} />
+            ) : (
             <View style={styles.grid}>
-              {MOCK_MATCHES.map((m) => (
+              {matches.map((m) => {
+                const similarity = Math.round(m.score * 100);
+                return (
                 <Pressable
-                  key={m.id}
+                  key={m.reference_id}
                   style={({ pressed }) => [
                     styles.matchCard,
                     pressed && styles.matchCardPressed,
                   ]}
                   onPress={() =>
-                    router.push(`/feedback?matchId=${m.id}`)
+                    router.push(
+                      `/feedback?matchId=${m.reference_id}&queryId=${queryId ?? ""}&referenceId=${m.reference_id}&diagnosis=${encodeURIComponent(m.diagnosis_label ?? "")}&similarity=${similarity}`
+                    )
                   }
                 >
                   <View style={styles.matchImage}>
@@ -173,12 +143,12 @@ export default function Compare() {
                       size={28}
                       color={D.border}
                     />
-                    <Text style={styles.matchCaseId}>Case #{m.id}</Text>
+                    <Text style={styles.matchCaseId}>Case #{m.reference_id}</Text>
                   </View>
 
                   <View style={styles.matchBody}>
                     <View style={styles.matchTopRow}>
-                      <SimilarityBadge value={m.similarity} />
+                      <SimilarityBadge value={similarity} />
                       <View style={styles.voteRow}>
                         <Pressable hitSlop={8} onPress={() => {}}>
                           <MaterialCommunityIcons
@@ -197,10 +167,10 @@ export default function Compare() {
                       </View>
                     </View>
 
-                    <SimilarityBar value={m.similarity} />
+                    <SimilarityBar value={similarity} />
 
                     <Text style={styles.matchDiag} numberOfLines={2}>
-                      {m.diagnosis}
+                      {m.diagnosis_label ?? "Unknown"}
                     </Text>
 
                     <View style={styles.viewMoreRow}>
@@ -213,8 +183,10 @@ export default function Compare() {
                     </View>
                   </View>
                 </Pressable>
-              ))}
+                );
+              })}
             </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -222,14 +194,46 @@ export default function Compare() {
   );
 }
 
-const D = {
-  primary: "#0D6E8A",
-  bg: "#EEF6FA",
-  surface: "#FFFFFF",
-  border: "#B8D9E8",
-  text: "#1A3340",
-  muted: "#7A9EB0",
-};
+function SimilarityBar({ value }: { value: number }) {
+  const color =
+    value >= 85 ? D.success : value >= 75 ? D.warning : D.danger;
+  return (
+    <View style={bar.wrap}>
+      <View
+        style={[bar.fill, { width: `${value}%` as any, backgroundColor: color }]}
+      />
+    </View>
+  );
+}
+
+function SimilarityBadge({ value }: { value: number }) {
+  const color =
+    value >= 85 ? D.success : value >= 75 ? D.warning : D.danger;
+  const bg =
+    value >= 85 ? D.successBg : value >= 75 ? D.warningBg : D.dangerBg;
+  return (
+    <View style={[bar.badge, { backgroundColor: bg }]}>
+      <Text style={[bar.badgeText, { color }]}>{value}%</Text>
+    </View>
+  );
+}
+
+const bar = StyleSheet.create({
+  wrap: {
+    height: 4,
+    backgroundColor: D.barTrack,
+    borderRadius: 4,
+    marginVertical: 6,
+    overflow: "hidden",
+  },
+  fill: { height: "100%", borderRadius: 4 },
+  badge: {
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  badgeText: { fontSize: 11, fontWeight: "700" },
+});
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: D.bg },
@@ -247,21 +251,21 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: D.onPrimaryOverlay,
     alignItems: "center",
     justifyContent: "center",
   },
   headerCenter: { flex: 1, alignItems: "center" },
-  headerTitle: { color: "#fff", fontWeight: "700", fontSize: 17 },
-  headerSubtitle: { color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: "500" },
+  headerTitle: { color: D.onPrimary, fontWeight: "700", fontSize: 17 },
+  headerSubtitle: { color: D.onPrimaryMuted, fontSize: 11, fontWeight: "500" },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerBtnAlt: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: D.onPrimaryOverlay,
   },
-  headerBtnAltText: { color: "#fff", fontWeight: "600", fontSize: 13 },
+  headerBtnAltText: { color: D.onPrimary, fontWeight: "600", fontSize: 13 },
 
   scroll: { flexGrow: 1 },
   page: {
