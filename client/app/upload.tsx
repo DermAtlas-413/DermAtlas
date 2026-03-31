@@ -3,7 +3,6 @@ import {
   SafeAreaView,
   View,
   Text,
-  TextInput,
   Pressable,
   StyleSheet,
   ScrollView,
@@ -12,56 +11,34 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { useAuthStore } from "@/state/auth-store";
 import { uploadImage } from "@/services/upload-service";
+import { useImageCapture } from "@/hooks/use-image-capture";
+import { PatientSelector } from "@/components/patient-selector";
+import type { PatientResponse } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Upload() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
-  const [patientId, setPatientId] = useState("");
+  const [selectedPatient, setSelectedPatient] = useState<PatientResponse | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  const { pickFromCamera, pickFromLibrary } = useImageCapture(setImageUri);
 
   function handleLogout() {
     clearAuth();
     router.replace("/");
   }
 
-  async function pickFromCamera() {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission required", "Camera access is needed to capture lesion images.");
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: "images",
-      quality: 0.9,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setImageUri(result.assets[0].uri);
-    }
-  }
-
-  async function pickFromLibrary() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission required", "Photo library access is needed to upload images.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: "images",
-      quality: 0.9,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setImageUri(result.assets[0].uri);
-    }
-  }
-
   async function handleSubmit() {
+    if (!selectedPatient) {
+      Alert.alert("No patient selected", "Please select a patient before submitting.");
+      return;
+    }
     if (!imageUri) {
       Alert.alert("No image selected", "Please capture or upload a lesion image first.");
       return;
@@ -70,9 +47,9 @@ export default function Upload() {
     try {
       const response = await fetch(imageUri);
       const blob = await response.blob();
-      const res = await uploadImage(blob, parseInt(patientId) || 0, "unspecified");
+      const res = await uploadImage(blob, selectedPatient.patient_id, "unspecified");
       router.push(
-        `/compare?queryId=${encodeURIComponent(res.query_id)}&imageUri=${encodeURIComponent(imageUri)}`
+        `/compare?queryId=${encodeURIComponent(res.query_id)}&imageUri=${encodeURIComponent(imageUri)}&patientId=${encodeURIComponent(selectedPatient.patient_id)}`
       );
     } catch (err) {
       Alert.alert("Upload failed", err instanceof Error ? err.message : "Please try again.");
@@ -111,24 +88,13 @@ export default function Upload() {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.page}>
-          {/* Patient ID */}
+          {/* Patient selector */}
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Patient Information</Text>
-            <View style={styles.inputWrap}>
-              <MaterialCommunityIcons
-                name="card-account-details-outline"
-                size={18}
-                color={D.muted}
-              />
-              <TextInput
-                value={patientId}
-                onChangeText={setPatientId}
-                placeholder="Patient ID"
-                placeholderTextColor={D.muted}
-                style={styles.input}
-                keyboardType="numeric"
-              />
-            </View>
+            <PatientSelector
+              selectedPatient={selectedPatient}
+              onSelect={setSelectedPatient}
+            />
           </View>
 
           {/* Image upload */}
@@ -213,10 +179,10 @@ export default function Upload() {
             style={({ pressed }) => [
               styles.submitBtn,
               pressed && styles.submitBtnPressed,
-              uploading && styles.submitBtnDisabled,
+              (uploading || !selectedPatient) && styles.submitBtnDisabled,
             ]}
             onPress={handleSubmit}
-            disabled={uploading}
+            disabled={uploading || !selectedPatient}
           >
             {uploading ? (
               <ActivityIndicator size="small" color={D.onPrimary} />
@@ -281,19 +247,6 @@ const styles = StyleSheet.create({
     color: D.text,
     letterSpacing: 0.3,
   },
-
-  inputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: D.surface,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    borderWidth: 1.5,
-    borderColor: D.border,
-  },
-  input: { flex: 1, fontSize: 15, color: D.text },
 
   imageCard: {
     backgroundColor: D.surface,

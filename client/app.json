@@ -46,7 +46,14 @@
     },
     "extra": {
       "apiBase": "http://localhost:8000/api/v1",
-      "useMock": false
+      "useMock": true,
+      "mockPatients": [
+        { "patient_id": 1, "mrn_internal": "MRN-001", "date_of_birth": "1985-06-15", "gender": "Female", "clinical_images": [] },
+        { "patient_id": 2, "mrn_internal": "MRN-002", "date_of_birth": "1972-11-03", "gender": "Male", "clinical_images": [] },
+        { "patient_id": 3, "mrn_internal": "MRN-003", "date_of_birth": "1990-04-22", "gender": "Female", "clinical_images": [] },
+        { "patient_id": 4, "mrn_internal": "MRN-004", "date_of_birth": "1965-09-08", "gender": "Male", "clinical_images": [] },
+        { "patient_id": 5, "mrn_internal": "MRN-005", "date_of_birth": "2001-01-30", "gender": "Non-binary", "clinical_images": [] }
+      ]
     }
   }
 }
