@@ -78,9 +78,25 @@ def test_is_production_property():
         PGUSER="user",
         PGPASSWORD="pass",
         PGDATABASE="dermatlas",
+        SECRET_KEY="a-valid-secret-key-for-testing-purposes-only",
+        GCP_PROJECT_ID="test-project",
+        GCS_BUCKET_NAME="test-bucket",
     )
     assert settings.is_production is True
     assert settings.is_testing is False
+
+
+def test_staging_env_validates_secrets():
+    """ENV=staging rejects missing/default secrets."""
+    with pytest.raises(ValueError, match="SECRET_KEY"):
+        _make_settings(
+            ENV="staging",
+            USE_CLOUD_SQL_CONNECTOR="true",
+            CLOUD_SQL_INSTANCE_CONNECTION_NAME="proj:region:db",
+            PGUSER="u",
+            PGPASSWORD="p",
+            PGDATABASE="db",
+        )
 
 
 def test_is_testing_property():
