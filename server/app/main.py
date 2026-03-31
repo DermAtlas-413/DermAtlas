@@ -32,9 +32,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_raw = settings.ALLOWED_ORIGINS.strip()
+if _raw:
+    _origins: list[str] = [o.strip() for o in _raw.split(",") if o.strip()]
+else:
+    if settings.ENV in ("staging", "production"):
+        raise RuntimeError(
+            f"ALLOWED_ORIGINS must be set for ENV={settings.ENV}. "
+            "Set it to your Netlify URL (e.g. https://your-site.netlify.app)."
+        )
+    _origins = ["http://localhost:8081", "http://localhost:19006"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

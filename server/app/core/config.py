@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     GCS_BUCKET_NAME: str = ""
     VERTEX_AI_INDEX_ENDPOINT: str = ""
 
+    # CORS — comma-separated list of allowed frontend origins
+    ALLOWED_ORIGINS: str = ""
+
     @model_validator(mode="after")
     def validate_database_config(self) -> "Settings":
         if self.ENV == "testing":
@@ -72,6 +75,24 @@ class Settings(BaseSettings):
             ]
             if missing:
                 raise ValueError(f"Missing Cloud SQL fields: {', '.join(missing)}")
+        return self
+
+    @model_validator(mode="after")
+    def validate_production_config(self) -> "Settings":
+        if self.ENV not in ("staging", "production"):
+            return self
+        errors: list[str] = []
+        if "change-me" in self.SECRET_KEY:
+            errors.append("SECRET_KEY must be changed from the default.")
+        if not self.GCP_PROJECT_ID:
+            errors.append("GCP_PROJECT_ID is required.")
+        if not self.GCS_BUCKET_NAME:
+            errors.append("GCS_BUCKET_NAME is required.")
+        if errors:
+            raise ValueError(
+                f"Configuration errors for ENV={self.ENV}:\n"
+                + "\n".join(f"  - {e}" for e in errors)
+            )
         return self
 
     @property
