@@ -10,8 +10,10 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { useAuthStore } from "@/state/auth-store";
 import { analyzeLesion } from "@/services/lesion-service";
+import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
 import type { AnalyzeMatch } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
 
@@ -19,15 +21,27 @@ export default function Compare() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
-  const { queryId } = useLocalSearchParams<{ queryId?: string }>();
+  const { queryId, imageUri } = useLocalSearchParams<{
+    queryId?: string;
+    imageUri?: string;
+  }>();
   const [matches, setMatches] = useState<AnalyzeMatch[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const decodedImageUri = imageUri ? decodeURIComponent(imageUri) : null;
 
   useEffect(() => {
     analyzeLesion(queryId ?? "mock")
       .then((res) => setMatches(res.results))
       .finally(() => setLoading(false));
   }, [queryId]);
+
+  function navigateToFeedback(m: AnalyzeMatch) {
+    const similarity = Math.round(m.score * 100);
+    router.push(
+      `/feedback?matchId=${m.reference_id}&queryId=${queryId ?? ""}&referenceId=${m.reference_id}&diagnosis=${encodeURIComponent(m.diagnosis_label ?? "")}&similarity=${similarity}&imageUri=${encodeURIComponent(decodedImageUri ?? "")}&referenceImageUri=${encodeURIComponent(m.gcs_uri ?? "")}`
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -81,32 +95,11 @@ export default function Compare() {
           <View style={styles.imageSection}>
             <Text style={styles.sectionLabel}>Submitted Image</Text>
             <View style={styles.imageCard}>
-              <View style={styles.imagePlaceholder}>
-                <MaterialCommunityIcons
-                  name="image-outline"
-                  size={44}
-                  color={D.border}
-                />
-                <Text style={styles.imagePlaceholderText}>Uploaded Image</Text>
-              </View>
-              <View style={styles.imageControls}>
-                <Pressable style={styles.controlBtn}>
-                  <MaterialCommunityIcons
-                    name="magnify-plus-outline"
-                    size={17}
-                    color={D.primary}
-                  />
-                  <Text style={styles.controlBtnText}>Zoom</Text>
-                </Pressable>
-                <Pressable style={styles.controlBtn}>
-                  <MaterialCommunityIcons
-                    name="arrow-all"
-                    size={17}
-                    color={D.primary}
-                  />
-                  <Text style={styles.controlBtnText}>Pan</Text>
-                </Pressable>
-              </View>
+              <Image
+                source={decodedImageUri ? { uri: decodedImageUri } : DEMO_UPLOAD_IMAGE}
+                style={styles.submittedImage}
+                contentFit="cover"
+              />
             </View>
           </View>
 
@@ -131,19 +124,18 @@ export default function Compare() {
                     styles.matchCard,
                     pressed && styles.matchCardPressed,
                   ]}
-                  onPress={() =>
-                    router.push(
-                      `/feedback?matchId=${m.reference_id}&queryId=${queryId ?? ""}&referenceId=${m.reference_id}&diagnosis=${encodeURIComponent(m.diagnosis_label ?? "")}&similarity=${similarity}`
-                    )
-                  }
+                  onPress={() => navigateToFeedback(m)}
                 >
                   <View style={styles.matchImage}>
-                    <MaterialCommunityIcons
-                      name="image-outline"
-                      size={28}
-                      color={D.border}
+                    <Image
+                      source={
+                        m.gcs_uri
+                          ? { uri: m.gcs_uri }
+                          : (DEMO_IMAGES[m.reference_id] ?? null)
+                      }
+                      style={styles.matchImageFill}
+                      contentFit="cover"
                     />
-                    <Text style={styles.matchCaseId}>Case #{m.reference_id}</Text>
                   </View>
 
                   <View style={styles.matchBody}>
@@ -200,7 +192,7 @@ function SimilarityBar({ value }: { value: number }) {
   return (
     <View style={bar.wrap}>
       <View
-        style={[bar.fill, { width: `${value}%` as any, backgroundColor: color }]}
+        style={[bar.fill, { width: `${value}%` as `${number}%`, backgroundColor: color }]}
       />
     </View>
   );
@@ -305,34 +297,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1.5,
     borderColor: D.border,
+    height: 220,
   },
-  imagePlaceholder: {
-    height: 180,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
+  submittedImage: {
+    width: "100%",
+    height: "100%",
   },
-  imagePlaceholderText: { color: D.muted, fontWeight: "600", fontSize: 13 },
-  imageControls: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: D.border,
-    padding: 10,
-    gap: 10,
-  },
-  controlBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: D.bg,
-    borderWidth: 1,
-    borderColor: D.border,
-  },
-  controlBtnText: { color: D.primary, fontWeight: "600", fontSize: 13 },
 
   grid: {
     flexDirection: "row",
@@ -354,6 +324,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
+    overflow: "hidden",
+  },
+  matchImageFill: {
+    width: "100%",
+    height: "100%",
   },
   matchCaseId: { color: D.muted, fontSize: 11, fontWeight: "600" },
   matchBody: { padding: 10, gap: 2 },

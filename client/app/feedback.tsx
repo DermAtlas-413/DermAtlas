@@ -1,45 +1,55 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import {
   SafeAreaView,
   View,
   Text,
   StyleSheet,
   Pressable,
-  Dimensions,
-  ScrollView,
-  Platform,
   Alert,
+  ScrollView,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { submitFeedback } from "@/services/feedback-service";
 import { useAuthStore } from "@/state/auth-store";
+import { ComparisonModal } from "@/components/comparison-modal";
+import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
 import { DermAtlasColors as D } from "@/constants/theme";
-
-type Slide = { key: string; label: string };
 
 export default function Feedback() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
-  const { matchId, queryId, referenceId, diagnosis, similarity } =
-    useLocalSearchParams<{
-      matchId?: string;
-      queryId?: string;
-      referenceId?: string;
-      diagnosis?: string;
-      similarity?: string;
-    }>();
+  const {
+    matchId,
+    queryId,
+    referenceId,
+    diagnosis,
+    similarity,
+    imageUri,
+    referenceImageUri,
+  } = useLocalSearchParams<{
+    matchId?: string;
+    queryId?: string;
+    referenceId?: string;
+    diagnosis?: string;
+    similarity?: string;
+    imageUri?: string;
+    referenceImageUri?: string;
+  }>();
 
-  const slides: Slide[] = [
-    { key: "1", label: `Match ${matchId ?? "1"}` },
-    { key: "2", label: `Alt View` },
-    { key: "3", label: `Close-up` },
-  ];
-
-  const [activeIndex, setActiveIndex] = useState(0);
   const [vote, setVote] = useState<"up" | "down" | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [compareVisible, setCompareVisible] = useState(false);
+
+  const uploadedSource = imageUri
+    ? { uri: decodeURIComponent(imageUri) }
+    : DEMO_UPLOAD_IMAGE;
+
+  const referenceSource = referenceImageUri
+    ? { uri: decodeURIComponent(referenceImageUri) }
+    : (referenceId ? DEMO_IMAGES[referenceId] : undefined);
 
   async function handleVote(direction: "up" | "down") {
     const next = vote === direction ? null : direction;
@@ -56,18 +66,6 @@ export default function Feedback() {
       setSubmitting(false);
     }
   }
-
-  const W = Dimensions.get("window").width;
-  const HORIZ_PAD = 20;
-  const carouselWidth = Math.min(W - HORIZ_PAD * 2, 560);
-
-  const scrollRef = useRef<ScrollView>(null);
-
-  const goTo = (idx: number) => {
-    const next = Math.max(0, Math.min(idx, slides.length - 1));
-    setActiveIndex(next);
-    scrollRef.current?.scrollTo({ x: next * carouselWidth, animated: true });
-  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -107,101 +105,48 @@ export default function Feedback() {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.page}>
-          {/* Carousel */}
-          <View style={styles.carouselSection}>
-            <View style={styles.carouselTopRow}>
-              <Text style={styles.sectionLabel}>Case Images</Text>
-              <View style={styles.slideCounter}>
-                <Text style={styles.slideCounterText}>
-                  {activeIndex + 1} / {slides.length}
-                </Text>
+          {/* Image comparison section */}
+          <View style={styles.comparisonSection}>
+            <View style={styles.comparisonHeader}>
+              <Text style={styles.sectionLabel}>Image Comparison</Text>
+            </View>
+
+            {/* Compact thumbnail preview */}
+            <View style={styles.thumbnailRow}>
+              <View style={styles.thumbnailPanel}>
+                <Image
+                  source={uploadedSource}
+                  style={styles.thumbnail}
+                  contentFit="cover"
+                />
+                <Text style={styles.thumbnailLabel}>Your Image</Text>
+              </View>
+              <View style={styles.thumbnailDivider} />
+              <View style={styles.thumbnailPanel}>
+                <Image
+                  source={referenceSource ?? undefined}
+                  style={styles.thumbnail}
+                  contentFit="cover"
+                />
+                <Text style={styles.thumbnailLabel}>Case Match</Text>
               </View>
             </View>
 
-            <View style={styles.carouselRow}>
-              <Pressable
-                style={[
-                  styles.navBtn,
-                  activeIndex === 0 && styles.navBtnDisabled,
-                ]}
-                onPress={() => goTo(activeIndex - 1)}
-                disabled={activeIndex === 0}
-              >
-                <MaterialCommunityIcons
-                  name="chevron-left"
-                  size={22}
-                  color={activeIndex === 0 ? D.border : D.primary}
-                />
-              </Pressable>
-
-              <ScrollView
-                ref={scrollRef}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                snapToInterval={carouselWidth}
-                decelerationRate="fast"
-                bounces={false}
-                scrollEventThrottle={16}
-                onMomentumScrollEnd={(e) => {
-                  const x = e.nativeEvent.contentOffset.x;
-                  const idx = Math.round(x / carouselWidth);
-                  setActiveIndex(
-                    Math.max(0, Math.min(idx, slides.length - 1))
-                  );
-                }}
-                style={{ width: carouselWidth }}
-              >
-                {slides.map((item) => (
-                  <View
-                    key={item.key}
-                    style={[styles.slide, { width: carouselWidth }]}
-                  >
-                    <MaterialCommunityIcons
-                      name="image-outline"
-                      size={48}
-                      color={D.border}
-                    />
-                    <Text style={styles.slideLabel}>{item.label}</Text>
-                  </View>
-                ))}
-              </ScrollView>
-
-              <Pressable
-                style={[
-                  styles.navBtn,
-                  activeIndex === slides.length - 1 && styles.navBtnDisabled,
-                ]}
-                onPress={() => goTo(activeIndex + 1)}
-                disabled={activeIndex === slides.length - 1}
-              >
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={22}
-                  color={
-                    activeIndex === slides.length - 1 ? D.border : D.primary
-                  }
-                />
-              </Pressable>
-            </View>
-
-            <View style={styles.dots}>
-              {slides.map((s, i) => (
-                <Pressable key={s.key} onPress={() => goTo(i)} hitSlop={8}>
-                  <View
-                    style={[
-                      styles.dot,
-                      i === activeIndex ? styles.dotActive : styles.dotIdle,
-                    ]}
-                  />
-                </Pressable>
-              ))}
-            </View>
-
-            {Platform.OS === "web" ? (
-              <Text style={styles.webHint}>
-                Use ‹ › buttons or click dots to navigate
-              </Text>
-            ) : null}
+            {/* Expand button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.expandBtn,
+                pressed && styles.expandBtnPressed,
+              ]}
+              onPress={() => setCompareVisible(true)}
+            >
+              <MaterialCommunityIcons
+                name="arrow-expand"
+                size={17}
+                color={D.onPrimary}
+              />
+              <Text style={styles.expandText}>Full Comparison</Text>
+            </Pressable>
           </View>
 
           {/* Diagnosis and similarity */}
@@ -243,10 +188,7 @@ export default function Feedback() {
 
             <View style={styles.voteRow}>
               <Pressable
-                style={[
-                  styles.voteBtn,
-                  vote === "up" && styles.voteBtnUp,
-                ]}
+                style={[styles.voteBtn, vote === "up" && styles.voteBtnUp]}
                 onPress={() => handleVote("up")}
                 disabled={submitting}
               >
@@ -306,6 +248,15 @@ export default function Feedback() {
           </View>
         </View>
       </ScrollView>
+
+      <ComparisonModal
+        visible={compareVisible}
+        onClose={() => setCompareVisible(false)}
+        uploadedSource={uploadedSource}
+        referenceSource={referenceSource}
+        uploadedSublabel="Patient Upload"
+        referenceSublabel={diagnosis ?? undefined}
+      />
     </SafeAreaView>
   );
 }
@@ -332,11 +283,7 @@ const styles = StyleSheet.create({
   },
   headerCenter: { flex: 1, alignItems: "center" },
   headerTitle: { color: D.onPrimary, fontWeight: "700", fontSize: 17 },
-  headerSubtitle: {
-    color: D.onPrimaryMuted,
-    fontSize: 11,
-    fontWeight: "500",
-  },
+  headerSubtitle: { color: D.onPrimaryMuted, fontSize: 11, fontWeight: "500" },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerBtnAlt: {
     paddingHorizontal: 12,
@@ -362,8 +309,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // Carousel
-  carouselSection: {
+  // Comparison section
+  comparisonSection: {
     backgroundColor: D.surface,
     borderRadius: 16,
     padding: 14,
@@ -371,48 +318,54 @@ const styles = StyleSheet.create({
     borderColor: D.border,
     gap: 12,
   },
-  carouselTopRow: {
+  comparisonHeader: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
   },
-  slideCounter: {
-    backgroundColor: D.bg,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+  thumbnailRow: {
+    flexDirection: "row",
+    height: 140,
+    gap: 0,
   },
-  slideCounterText: { color: D.muted, fontSize: 12, fontWeight: "600" },
-
-  carouselRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  slide: {
-    height: 240,
-    backgroundColor: D.bg,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
+  thumbnailPanel: {
+    flex: 1,
+    gap: 6,
   },
-  slideLabel: { color: D.muted, fontWeight: "600", fontSize: 13 },
-
-  navBtn: {
-    width: 36,
-    height: 36,
+  thumbnail: {
+    flex: 1,
     borderRadius: 10,
     backgroundColor: D.bg,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: D.border,
+  },
+  thumbnailLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: D.muted,
+    textAlign: "center",
+  },
+  thumbnailDivider: {
+    width: 1,
+    backgroundColor: D.border,
+    marginHorizontal: 8,
+    marginBottom: 22, // below the label area
+  },
+  expandBtn: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
+    backgroundColor: D.primary,
+    borderRadius: 10,
+    paddingVertical: 11,
   },
-  navBtnDisabled: { opacity: 0.4 },
-
-  dots: { flexDirection: "row", gap: 6, justifyContent: "center" },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  dotActive: { backgroundColor: D.primary },
-  dotIdle: { backgroundColor: D.border },
-
-  webHint: { fontSize: 11, color: D.muted, fontWeight: "500", textAlign: "center" },
+  expandBtnPressed: { opacity: 0.85 },
+  expandText: {
+    color: D.onPrimary,
+    fontWeight: "700",
+    fontSize: 14,
+  },
 
   // Meta
   metaRow: { flexDirection: "row", gap: 12 },

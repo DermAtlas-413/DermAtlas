@@ -7,10 +7,15 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { Image } from "expo-image";
 import { useAuthStore } from "@/state/auth-store";
+import { uploadImage } from "@/services/upload-service";
 import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Upload() {
@@ -18,10 +23,62 @@ export default function Upload() {
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const [patientId, setPatientId] = useState("");
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   function handleLogout() {
     clearAuth();
     router.replace("/");
+  }
+
+  async function pickFromCamera() {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission required", "Camera access is needed to capture lesion images.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: "images",
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setImageUri(result.assets[0].uri);
+    }
+  }
+
+  async function pickFromLibrary() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission required", "Photo library access is needed to upload images.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setImageUri(result.assets[0].uri);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!imageUri) {
+      Alert.alert("No image selected", "Please capture or upload a lesion image first.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      const res = await uploadImage(blob, parseInt(patientId) || 0, "unspecified");
+      router.push(
+        `/compare?queryId=${encodeURIComponent(res.query_id)}&imageUri=${encodeURIComponent(imageUri)}`
+      );
+    } catch (err) {
+      Alert.alert("Upload failed", err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setUploading(false);
+    }
   }
 
   return (
@@ -69,6 +126,7 @@ export default function Upload() {
                 placeholder="Patient ID"
                 placeholderTextColor={D.muted}
                 style={styles.input}
+                keyboardType="numeric"
               />
             </View>
           </View>
@@ -77,19 +135,27 @@ export default function Upload() {
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Lesion Image</Text>
             <View style={styles.imageCard}>
-              <View style={styles.imagePlaceholder}>
-                <MaterialCommunityIcons
-                  name="image-outline"
-                  size={52}
-                  color={D.border}
+              {imageUri ? (
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.imagePreview}
+                  contentFit="cover"
                 />
-                <Text style={styles.imagePlaceholderText}>
-                  No image selected
-                </Text>
-                <Text style={styles.imagePlaceholderSub}>
-                  Full lesion in frame, well-lit
-                </Text>
-              </View>
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <MaterialCommunityIcons
+                    name="image-outline"
+                    size={52}
+                    color={D.border}
+                  />
+                  <Text style={styles.imagePlaceholderText}>
+                    No image selected
+                  </Text>
+                  <Text style={styles.imagePlaceholderSub}>
+                    Full lesion in frame, well-lit
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.actionRow}>
                 <Pressable
@@ -97,6 +163,7 @@ export default function Upload() {
                     styles.actionCard,
                     pressed && styles.actionCardPressed,
                   ]}
+                  onPress={pickFromCamera}
                 >
                   <View style={styles.actionIconWrap}>
                     <MaterialCommunityIcons
@@ -113,6 +180,7 @@ export default function Upload() {
                     styles.actionCard,
                     pressed && styles.actionCardPressed,
                   ]}
+                  onPress={pickFromLibrary}
                 >
                   <View style={styles.actionIconWrap}>
                     <MaterialCommunityIcons
@@ -145,11 +213,19 @@ export default function Upload() {
             style={({ pressed }) => [
               styles.submitBtn,
               pressed && styles.submitBtnPressed,
+              uploading && styles.submitBtnDisabled,
             ]}
-            onPress={() => router.push("/compare")}
+            onPress={handleSubmit}
+            disabled={uploading}
           >
-            <MaterialCommunityIcons name="send" size={18} color={D.onPrimary} />
-            <Text style={styles.submitText}>Submit for Analysis</Text>
+            {uploading ? (
+              <ActivityIndicator size="small" color={D.onPrimary} />
+            ) : (
+              <MaterialCommunityIcons name="send" size={18} color={D.onPrimary} />
+            )}
+            <Text style={styles.submitText}>
+              {uploading ? "Uploading…" : "Submit for Analysis"}
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -198,19 +274,6 @@ const styles = StyleSheet.create({
     width: "100%",
   },
 
-  infoStrip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: D.surface,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: D.border,
-  },
-  infoStripText: { color: D.text, fontSize: 13, fontWeight: "600" },
-
   section: { gap: 8 },
   sectionLabel: {
     fontSize: 13,
@@ -238,6 +301,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1.5,
     borderColor: D.border,
+  },
+  imagePreview: {
+    height: 200,
+    width: "100%",
   },
   imagePlaceholder: {
     height: 200,
@@ -297,5 +364,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   submitBtnPressed: { opacity: 0.85 },
+  submitBtnDisabled: { opacity: 0.65 },
   submitText: { color: D.onPrimary, fontSize: 16, fontWeight: "700" },
 });
