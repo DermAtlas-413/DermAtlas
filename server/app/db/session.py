@@ -3,7 +3,7 @@ Async SQLAlchemy engine and session factory.
 
 Two engine strategies are supported:
   - Direct URL  (development / testing): create_async_engine(DATABASE_URL)
-  - Cloud SQL connector (staging / production): async_creator= via AsyncConnector
+  - Cloud SQL connector (staging / production): async_creator= via Connector + asyncpg
 """
 
 from __future__ import annotations
@@ -32,13 +32,18 @@ def _build_direct_engine(settings) -> AsyncEngine:
     )
 
 
-def _build_cloud_sql_engine(settings) -> AsyncEngine:
-    from google.cloud.sql.connector import AsyncConnector  # type: ignore[import]
+async def _build_cloud_sql_engine(settings) -> AsyncEngine:
+    import asyncio
 
-    connector = AsyncConnector()
+    from google.cloud.sql.connector import Connector  # type: ignore[import]
+
+    # Pass the running event loop explicitly so connect_async() is
+    # always called on the same loop the Connector was bound to.
+    loop = asyncio.get_running_loop()
+    connector = Connector(loop=loop)
 
     async def getconn():
-        return await connector.connect(
+        return await connector.connect_async(
             settings.CLOUD_SQL_INSTANCE_CONNECTION_NAME,
             "asyncpg",
             user=settings.PGUSER,
@@ -54,13 +59,13 @@ def _build_cloud_sql_engine(settings) -> AsyncEngine:
     )
 
 
-def init_db_engine() -> None:
+async def init_db_engine() -> None:
     """Create the engine and session factory. Called once at application startup."""
     global engine, AsyncSessionLocal
 
     settings = get_settings()
     if settings.USE_CLOUD_SQL_CONNECTOR:
-        engine = _build_cloud_sql_engine(settings)
+        engine = await _build_cloud_sql_engine(settings)
     else:
         engine = _build_direct_engine(settings)
 

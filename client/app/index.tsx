@@ -11,7 +11,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { login } from "@/services/auth-service";
@@ -21,6 +20,23 @@ export default function Index() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin() {
+    setError(null);
+    setLoading(true);
+    try {
+      await login(username, password);
+      router.replace("/upload");
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error ? e.message : "Login failed. Please try again.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -107,27 +123,36 @@ export default function Index() {
                   </View>
                 </View>
 
+                {error ? (
+                  <View style={styles.errorBanner}>
+                    <MaterialCommunityIcons
+                      name="alert-circle-outline"
+                      size={16}
+                      color={D.danger}
+                    />
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
+
                 <Pressable
                   style={({ pressed }) => [
                     styles.button,
-                    pressed && styles.buttonPressed,
+                    loading && styles.buttonDisabled,
+                    pressed && !loading && styles.buttonPressed,
                   ]}
-                  onPress={async () => {
-                    try {
-                      await login(username, password);
-                      router.replace("/upload");
-                    } catch (e: unknown) {
-                      const msg = e instanceof Error ? e.message : "Login failed";
-                      Alert.alert("Sign In Failed", msg);
-                    }
-                  }}
+                  onPress={handleLogin}
+                  disabled={loading}
                 >
-                  <Text style={styles.buttonText}>Sign In</Text>
-                  <MaterialCommunityIcons
-                    name="arrow-right"
-                    size={20}
-                    color={D.onPrimary}
-                  />
+                  <Text style={styles.buttonText}>
+                    {loading ? "Signing In…" : "Sign In"}
+                  </Text>
+                  {!loading ? (
+                    <MaterialCommunityIcons
+                      name="arrow-right"
+                      size={20}
+                      color={D.onPrimary}
+                    />
+                  ) : null}
                 </Pressable>
 
                 <Pressable onPress={() => {}} style={styles.forgotWrap}>
@@ -239,7 +264,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   buttonPressed: { opacity: 0.85 },
+  buttonDisabled: { opacity: 0.6 },
   buttonText: { color: D.onPrimary, fontSize: 16, fontWeight: "700" },
+
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: D.dangerBg,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: D.danger,
+  },
+  errorText: { color: D.danger, fontSize: 13, fontWeight: "600", flex: 1 },
 
   forgotWrap: { alignItems: "center" },
   forgotText: { color: D.primary, fontSize: 13, fontWeight: "600" },
