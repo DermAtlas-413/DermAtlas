@@ -37,3 +37,21 @@ export async function login(
   useAuthStore.getState().setAuth(tokenRes.access_token, user);
   return { token: tokenRes.access_token, user };
 }
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  if (USE_MOCK) {
+    await delay(600);
+    if (currentPassword === "wrong") {
+      throw new Error("Current password is incorrect.");
+    }
+    return;
+  }
+  await apiFetch<void>("/auth/password", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+}

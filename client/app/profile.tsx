@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -41,24 +40,15 @@ export default function Profile() {
   }
 
   function handleChangePassword() {
-    Alert.alert(
-      "Change Password",
-      "Password reset is not yet available in this version."
-    );
+    router.push("/change-password");
   }
 
   function handleManageUsers() {
-    Alert.alert(
-      "Manage Users",
-      "User management is not yet available in this version."
-    );
+    router.push("/admin/users");
   }
 
   function handleAuditLogs() {
-    Alert.alert(
-      "View Audit Logs",
-      "Audit log viewer is not yet available in this version."
-    );
+    router.push("/admin/audit-logs");
   }
 
   return (
