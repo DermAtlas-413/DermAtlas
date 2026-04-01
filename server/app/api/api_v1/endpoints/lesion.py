@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+
 from google.cloud import aiplatform
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from app.core.deps import require_pcp
@@ -44,12 +48,13 @@ async def analyze_lesion(
             index_endpoint_name=settings.VERTEX_AI_INDEX_ENDPOINT
         )
         response = endpoint.find_neighbors(
-            deployed_index_id=settings.VERTEX_AI_INDEX_ENDPOINT,
-            queries=[[0.0] * 128],
+            deployed_index_id="dermatlas_deployed_index",
+            queries=[[0.0] * 1408],
             num_neighbors=_MAX_RESULTS,
         )
         neighbors = response[0] if response else []
-    except Exception:
+    except Exception as exc:
+        logger.exception("Vertex AI vector search failed")
         raise HTTPException(status_code=503, detail="Vector search service unavailable")
 
     # --- Cap results and enrich with atlas metadata ---
@@ -64,7 +69,7 @@ async def analyze_lesion(
             AnalysisResult(
                 reference_id=n.id,
                 diagnosis_label=ref.diagnosis_label if ref else None,
-                score=float(n.distance),
+                score=float(n.distance) if n.distance is not None else 0.0,
                 gcs_uri=ref.gcs_image_uri if ref else None,
             )
         )
