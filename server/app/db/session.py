@@ -32,18 +32,15 @@ def _build_direct_engine(settings) -> AsyncEngine:
     )
 
 
-async def _build_cloud_sql_engine(settings) -> AsyncEngine:
-    import asyncio
+def _build_cloud_sql_engine(settings) -> AsyncEngine:
+    from google.cloud.sql.connector import create_async_connector  # type: ignore[import]
 
-    from google.cloud.sql.connector import Connector  # type: ignore[import]
-
-    # Pass the running event loop explicitly so connect_async() is
-    # always called on the same loop the Connector was bound to.
-    loop = asyncio.get_running_loop()
-    connector = Connector(loop=loop)
+    _connector: list = []  # mutable container so the closure can assign once
 
     async def getconn():
-        return await connector.connect_async(
+        if not _connector:
+            _connector.append(await create_async_connector())
+        return await _connector[0].connect_async(
             settings.CLOUD_SQL_INSTANCE_CONNECTION_NAME,
             "asyncpg",
             user=settings.PGUSER,
