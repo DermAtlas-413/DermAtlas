@@ -1,6 +1,8 @@
-"""GET /api/v1/patients/{patient_id} — Retrieve patient demographics and image history."""
+"""Patient endpoints — list and detail views for PCP-owned patients."""
 
 from __future__ import annotations
+
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy import select
@@ -15,6 +17,42 @@ from app.models.user import User
 from app.schemas.patient import ClinicalImageSummary, PatientResponse
 
 router = APIRouter()
+
+
+@router.get("/patients", response_model=List[PatientResponse])
+async def list_patients(
+    current_user: User = Depends(require_pcp),
+    db: AsyncSession = Depends(get_db),
+) -> List[PatientResponse]:
+    result = await db.execute(
+        select(Patient).where(Patient.primary_physician_id == current_user.user_id)
+    )
+    patients = result.scalars().all()
+
+    responses: list[PatientResponse] = []
+    for patient in patients:
+        images_result = await db.execute(
+            select(ClinicalImage).where(ClinicalImage.patient_id == patient.patient_id)
+        )
+        images = images_result.scalars().all()
+        responses.append(
+            PatientResponse(
+                patient_id=patient.patient_id,
+                mrn_internal=patient.mrn_internal,
+                date_of_birth=patient.date_of_birth,
+                gender=patient.gender,
+                clinical_images=[
+                    ClinicalImageSummary(
+                        query_id=img.query_id,
+                        gcs_uri=img.gcs_image_uri,
+                        captured_at=img.captured_at.isoformat() if img.captured_at else None,
+                        lesion_location=img.lesion_location,
+                    )
+                    for img in images
+                ],
+            )
+        )
+    return responses
 
 
 @router.get("/patients/{patient_id}", response_model=PatientResponse)

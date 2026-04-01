@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 
+import vertexai
 from google.cloud import aiplatform
+from vertexai.vision_models import Image, MultiModalEmbeddingModel
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from app.core.deps import require_pcp
@@ -20,9 +20,21 @@ from app.models.reference_atlas import ReferenceAtlas
 from app.models.user import User
 from app.schemas.analyze import AnalyzeRequest, AnalyzeResponse, AnalysisResult
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 _MAX_RESULTS = 10
+
+
+def _get_image_embedding(gcs_uri: str) -> list[float]:
+    """Generate a 1408-dim embedding for an image in GCS using Vertex AI multimodal model."""
+    settings = get_settings()
+    vertexai.init(project=settings.GCP_PROJECT_ID, location="us-central1")
+    model = MultiModalEmbeddingModel.from_pretrained("multimodalembedding@001")
+    image = Image(gcs_uri=gcs_uri)
+    embeddings = model.get_embeddings(image=image)
+    return embeddings.image_embedding
 
 
 @router.post("/lesion/analyze", response_model=AnalyzeResponse)
@@ -41,7 +53,14 @@ async def analyze_lesion(
     if image.user_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access to this image is forbidden")
 
-    # --- Query Vertex AI ---
+    # --- Generate embedding from the uploaded image ---
+    try:
+        embedding = _get_image_embedding(image.gcs_image_uri)
+    except Exception as exc:
+        logger.exception("Failed to generate image embedding for %s", image.gcs_image_uri)
+        raise HTTPException(status_code=503, detail="Image embedding service unavailable")
+
+    # --- Query Vertex AI Vector Search ---
     settings = get_settings()
     try:
         endpoint = aiplatform.MatchingEngineIndexEndpoint(
@@ -49,7 +68,7 @@ async def analyze_lesion(
         )
         response = endpoint.find_neighbors(
             deployed_index_id="dermatlas_deployed_index",
-            queries=[[0.0] * 1408],
+            queries=[embedding],
             num_neighbors=_MAX_RESULTS,
         )
         neighbors = response[0] if response else []

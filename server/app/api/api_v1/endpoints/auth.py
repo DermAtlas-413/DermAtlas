@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import create_access_token, verify_password
 from app.db import get_db
+from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.schemas.auth import TokenResponse
 
@@ -36,4 +37,14 @@ async def login(
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     token = create_access_token({"sub": str(user.user_id), "role": user.role.value})
+
+    db.add(
+        AuditLog(
+            user_id=user.user_id,
+            action="LOGIN",
+            target_resource=f"session:{user.email}",
+        )
+    )
+    await db.flush()
+
     return TokenResponse(access_token=token)

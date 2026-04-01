@@ -202,5 +202,16 @@ export async function getAuditLogs(params: AuditLogParams = {}): Promise<AuditLo
   if (from) qs.set("from", from);
   if (to) qs.set("to", to);
 
-  return apiFetch<AuditLogPage>(`/audit-logs?${qs.toString()}`);
+  try {
+    return await apiFetch<AuditLogPage>(`/audit-logs?${qs.toString()}`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "";
+    if (message.includes("401") || message.includes("session")) {
+      throw new Error("Your session has expired. Please log in again.");
+    }
+    if (message.includes("403")) {
+      throw new Error("You don't have permission to view audit logs.");
+    }
+    throw new Error("Failed to load audit logs. Please try again later.");
+  }
 }

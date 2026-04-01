@@ -21,18 +21,24 @@ export default function Compare() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
-  const { queryId, imageUri } = useLocalSearchParams<{
+  const { queryId, imageUri, patientId } = useLocalSearchParams<{
     queryId?: string;
     imageUri?: string;
+    patientId?: string;
   }>();
   const [matches, setMatches] = useState<AnalyzeMatch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const decodedImageUri = imageUri ? decodeURIComponent(imageUri) : null;
 
   useEffect(() => {
+    setError(null);
     analyzeLesion(queryId ?? "mock")
       .then((res) => setMatches(res.results))
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
+      })
       .finally(() => setLoading(false));
   }, [queryId]);
 
@@ -88,7 +94,7 @@ export default function Compare() {
               size={14}
               color={D.primary}
             />
-            <Text style={styles.patientText}>Patient ID # ______</Text>
+            <Text style={styles.patientText}>Patient ID # {patientId ?? "—"}</Text>
           </View>
 
           {/* Submitted image */}
@@ -102,6 +108,14 @@ export default function Compare() {
               />
             </View>
           </View>
+
+          {/* Error banner */}
+          {error && (
+            <View style={styles.errorBanner}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={18} color={D.danger} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
 
           {/* Similar cases */}
           <View>
@@ -280,6 +294,19 @@ const styles = StyleSheet.create({
     borderColor: D.border,
   },
   patientText: { color: D.text, fontSize: 13, fontWeight: "600" },
+
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: D.dangerBg,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: D.danger,
+  },
+  errorText: { color: D.danger, fontSize: 13, fontWeight: "600", flex: 1 },
 
   sectionLabel: {
     fontSize: 13,
