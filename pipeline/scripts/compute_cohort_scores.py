@@ -4,14 +4,16 @@ Compute cohort deviation scores for all images.
 The "ugly duckling" concept in dermatology: a lesion that looks visually
 different from the BENIGN lesions in the same demographic cohort is suspicious.
 
-Key design decision: KNN indices and LOF are built from BENIGN cases only
-(nv, bkl, df — malignant=0). This means deviation scores measure how unlike
-a lesion looks compared to typical benign lesions in the same demographic.
-High deviation = looks unlike benign baseline = suspicious.
+Key design decision: KNN indices and LOF are built from TRAIN-SET CONFIRMED
+BENIGN cases only. Two filters apply to the reference pool:
+  1. Train split only — test images must never contribute to the reference
+     distribution they will be scored against (data leakage across split).
+  2. Confirmed benign — ISIC 2020 images with no class label are excluded
+     because "unknown" does not mean confirmed benign; they pollute the
+     ugly duckling reference distribution.
 
-If we used all cases (benign + malignant), a melanoma could find other
-melanomas as its nearest neighbors and score as non-deviant — defeating the
-purpose of the ugly duckling signal.
+All images (train + test, benign + malignant) are scored against this frozen
+reference index. Test images query it without having contributed to it.
 
 Pipeline:
   1. Group benign images by clinical cohort (age_group × sex × localization)
@@ -39,8 +41,9 @@ Output features per image (cohort_scores.csv):
   lof_score           — Local Outlier Factor vs benign population (higher = more outlier)
 
 Input (all from GCS):
-  gs://dermatlas-ml-data/processed/embeddings.npy    (57773, 1408)
-  gs://dermatlas-ml-data/processed/image_ids.npy     (57773,)
+  gs://dermatlas-ml-data/processed/embeddings.npy       (57773, 1408)
+  gs://dermatlas-ml-data/processed/image_ids.npy        (57773,)
+  gs://dermatlas-ml-data/processed/oof_image_ids.npy    (22985,) — train IDs
   gs://dermatlas-ml-data/processed/unified_metadata.csv
 
 Output:
@@ -247,9 +250,13 @@ def main():
 
     # ── 1. Load data ──────────────────────────────────────────────────────────
     print("\n[1/6] Loading data from GCS...")
-    embeddings = download_npy(client, "processed/embeddings.npy").astype(np.float32)
-    image_ids  = download_npy(client, "processed/image_ids.npy")
-    meta_full  = download_csv(client, "processed/unified_metadata.csv")
+    embeddings   = download_npy(client, "processed/embeddings.npy").astype(np.float32)
+    image_ids    = download_npy(client, "processed/image_ids.npy")
+    train_ids    = download_npy(client, "processed/oof_image_ids.npy")
+    meta_full    = download_csv(client, "processed/unified_metadata.csv")
+
+    train_ids_set = set(str(x) for x in train_ids)
+    print(f"  Train IDs loaded: {len(train_ids_set)} (reference pool restricted to these)")
 
     # Normalize class columns
     for cls in TARGET_CLASSES:
@@ -281,20 +288,31 @@ def main():
     # Add cohort columns to all images
     meta_full = add_cohort_columns(meta_full)
 
-    # ── 2. Build benign subset ────────────────────────────────────────────────
-    print("\n[2/6] Preparing benign baseline subset...")
-    is_benign = meta_full["malignant"] == 0
-    # Also exclude completely unknown rows from the benign index
-    # (ISIC 2020 unknowns are confirmed benign and CAN be in the index)
-    benign_meta = meta_full[is_benign].reset_index(drop=True).copy()
-    print(f"  Benign rows (index baseline) : {len(benign_meta)}")
-    print(f"  Malignant rows (will be scored against benign baseline): {(~is_benign).sum()}")
+    # ── 2. Build benign reference subset ─────────────────────────────────────
+    print("\n[2/6] Preparing benign reference subset (train-only, confirmed benign)...")
+
+    # Issue 1: restrict to train split only
+    is_train = meta_full["image_id"].isin(train_ids_set)
+
+    # Issue 8: exclude ISIC 2020 unknowns (no confirmed class label)
+    has_confirmed_label = meta_full[TARGET_CLASSES].sum(axis=1) > 0
+    is_confirmed_benign = (meta_full["malignant"] == 0) & has_confirmed_label
+
+    is_reference = is_train & is_confirmed_benign
+    benign_meta  = meta_full[is_reference].reset_index(drop=True).copy()
+
+    n_excluded_test    = (~is_train & (meta_full["malignant"] == 0)).sum()
+    n_excluded_unknown = (is_train & (meta_full["malignant"] == 0) & ~has_confirmed_label).sum()
+
+    print(f"  Reference pool (train confirmed benign): {len(benign_meta)}")
+    print(f"  Excluded — test-set benign             : {n_excluded_test}")
+    print(f"  Excluded — ISIC2020 unknowns (train)   : {n_excluded_unknown}")
+    print(f"  All images scored against this index   : {len(meta_full)}")
 
     # Benign class breakdown
     for cls in ["nv", "bkl", "df"]:
         if cls in benign_meta.columns:
             print(f"    {cls}: {int(benign_meta[cls].sum())}")
-    print(f"    unknown (ISIC2020 benign): {int((benign_meta[TARGET_CLASSES].sum(axis=1) == 0).sum())}")
 
     # Extract benign embedding matrix
     benign_embed_idx = benign_meta["embed_idx"].values
@@ -431,10 +449,12 @@ def main():
 
     print("\n" + "=" * 60)
     print("✓ Cohort deviation scores complete!")
-    print(f"  Images scored  : {len(scores_df)}")
-    print(f"  Benign baseline: {len(benign_meta)} images")
-    print(f"  Cohort groups  : {scores_df['cohort_key'].nunique()}")
-    print(f"  Output         : gs://{GCS_BUCKET}/{GCS_OUTPUT}")
+    print(f"  Images scored        : {len(scores_df)}")
+    print(f"  Reference pool       : {len(benign_meta)} (train confirmed benign)")
+    print(f"  Cohort groups        : {scores_df['cohort_key'].nunique()}")
+    print(f"  ISIC2020 unknowns    : excluded from reference (Issue 8 fix)")
+    print(f"  Test leakage         : eliminated (Issue 1 fix)")
+    print(f"  Output               : gs://{GCS_BUCKET}/{GCS_OUTPUT}")
     print("=" * 60)
 
 

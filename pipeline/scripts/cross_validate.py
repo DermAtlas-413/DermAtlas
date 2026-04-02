@@ -148,13 +148,37 @@ def build_features(image_ids, softmax, meta, cohort, encoder):
     df["age_normalized"]       = (df["age"].fillna(age_median) - age_median) / 20.0
     df["sex_encoded"]          = df["sex"].fillna("unknown").map(encoder["sex_map"]).fillna(0).astype(int)
     df["localization_encoded"] = df["localization"].fillna("unknown").map(encoder["loc_map"]).fillna(0).astype(int)
+    # Issue 3: use saved train medians, never compute from current data
+    cohort_medians = encoder.get("cohort_medians", {})
     for col in COHORT_COLS:
-        df[col] = df[col].fillna(df[col].median())
+        df[col] = df[col].fillna(cohort_medians.get(col, df[col].median()))
 
     feat_cols = SOFTMAX_COLS + ["age_normalized","sex_encoded","localization_encoded"] + COHORT_COLS
     X = df[feat_cols].values.astype(np.float32)
     y = df["malignant"].fillna(0).astype(int).values
     return X, y
+
+
+# ── Threshold tuning ──────────────────────────────────────────────────────────
+def tune_threshold(y_true, y_proba, target_recall=RECALL_TARGET):
+    """
+    Issue 5 fix: tune threshold per fold on that fold's val proba.
+    Finds the highest threshold that still achieves target recall
+    (maximises specificity while keeping recall >= target).
+    """
+    best_threshold  = 0.5
+    best_specificity = 0.0
+    for t in np.arange(0.05, 0.95, 0.01):
+        preds  = (y_proba >= t).astype(int)
+        recall = recall_score(y_true, preds, zero_division=0)
+        if recall >= target_recall:
+            tn = ((preds == 0) & (y_true == 0)).sum()
+            fp = ((preds == 1) & (y_true == 0)).sum()
+            specificity = tn / (tn + fp + 1e-6)
+            if specificity > best_specificity:
+                best_specificity = specificity
+                best_threshold   = float(t)
+    return best_threshold
 
 
 # ── Metrics ───────────────────────────────────────────────────────────────────
@@ -332,18 +356,22 @@ def main():
                   eval_set=[(X_te, y_te)],
                   verbose=False)
 
+        # Issue 5: tune threshold on this fold's val proba (not the global one)
+        te_proba     = model.predict_proba(X_te)[:, 1]
+        fold_threshold = tune_threshold(y_te, te_proba)
+        print(f"  Fold {fold} tuned threshold: {fold_threshold:.2f}")
+
         # Metrics on TRAIN portion
         tr_proba   = model.predict_proba(X_tr)[:, 1]
-        train_m    = compute_metrics(y_tr, tr_proba, threshold)
-        print_metrics(train_m, threshold, f"Fold {fold} — TRAIN ({len(y_tr)} rows)")
+        train_m    = compute_metrics(y_tr, tr_proba, fold_threshold)
+        print_metrics(train_m, fold_threshold, f"Fold {fold} — TRAIN ({len(y_tr)} rows)")
 
         # Metrics on TEST portion (fold held-out)
-        te_proba   = model.predict_proba(X_te)[:, 1]
-        test_m     = compute_metrics(y_te, te_proba, threshold)
-        print_metrics(test_m, threshold, f"Fold {fold} — TEST  ({len(y_te)} rows)")
+        test_m     = compute_metrics(y_te, te_proba, fold_threshold)
+        print_metrics(test_m, fold_threshold, f"Fold {fold} — TEST  ({len(y_te)} rows)")
 
         # Train vs test comparison table
-        print_fold_comparison(train_m, test_m, threshold, fold)
+        print_fold_comparison(train_m, test_m, fold_threshold, fold)
 
         all_train_metrics.append(train_m)
         all_test_metrics.append(test_m)

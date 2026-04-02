@@ -171,8 +171,10 @@ def assemble_test_features(
     df["sex_encoded"]          = df["sex"].fillna("unknown").map(sex_map).fillna(0).astype(int)
     df["localization_encoded"] = df["localization"].fillna("unknown").map(loc_map).fillna(0).astype(int)
 
+    # Issue 3: use saved train medians, never compute from test data
+    cohort_medians = encoder.get("cohort_medians", {})
     for col in COHORT_COLS:
-        df[col] = df[col].fillna(df[col].median())
+        df[col] = df[col].fillna(cohort_medians.get(col, df[col].median()))
 
     feature_cols = (SOFTMAX_COLS +
                     ["age_normalized", "sex_encoded", "localization_encoded"] +

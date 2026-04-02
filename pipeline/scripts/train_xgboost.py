@@ -141,23 +141,27 @@ def assemble_features(
                           sorted(df["sex"].fillna("unknown").unique()))}
         loc_map     = {v: i for i, v in enumerate(
                           sorted(df["localization"].fillna("unknown").unique()))}
+        # Issue 3: save train-set cohort medians so eval/CV never uses test median
+        cohort_medians = {col: float(df[col].median()) for col in COHORT_COLS}
         encoder = {
-            "age_median": age_median,
-            "sex_map":    sex_map,
-            "loc_map":    loc_map,
+            "age_median":     age_median,
+            "sex_map":        sex_map,
+            "loc_map":        loc_map,
+            "cohort_medians": cohort_medians,
         }
     else:
-        age_median = encoder["age_median"]
-        sex_map    = encoder["sex_map"]
-        loc_map    = encoder["loc_map"]
+        age_median     = encoder["age_median"]
+        sex_map        = encoder["sex_map"]
+        loc_map        = encoder["loc_map"]
+        cohort_medians = encoder.get("cohort_medians", {})
 
     df["age_normalized"]       = (df["age"].fillna(age_median) - age_median) / 20.0
     df["sex_encoded"]          = df["sex"].fillna("unknown").map(sex_map).fillna(0).astype(int)
     df["localization_encoded"] = df["localization"].fillna("unknown").map(loc_map).fillna(0).astype(int)
 
-    # Fill any remaining NaNs in cohort scores with column medians
+    # Issue 3: use saved train medians for NaN fill, not the current data's median
     for col in COHORT_COLS:
-        df[col] = df[col].fillna(df[col].median())
+        df[col] = df[col].fillna(cohort_medians.get(col, df[col].median()))
 
     # ── Final feature matrix ──────────────────────────────────────────────────
     feature_cols = (
