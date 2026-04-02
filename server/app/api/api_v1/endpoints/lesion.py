@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from google.cloud import storage as gcs_storage
+
 from app.core.config import get_settings
 from app.core.deps import require_pcp
 from app.db import get_db
@@ -25,6 +27,40 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _MAX_RESULTS = 10
+_gcs_client: gcs_storage.Client | None = None
+_signing_creds = None
+
+
+def _get_signed_url(gcs_uri: str) -> str:
+    """Generate a 1-hour signed URL for a GCS object."""
+    import google.auth
+    from google.auth.transport import requests as auth_requests
+    from datetime import timedelta
+
+    global _gcs_client, _signing_creds
+    if _gcs_client is None:
+        _gcs_client = gcs_storage.Client()
+    if _signing_creds is None:
+        _signing_creds, _ = google.auth.default()
+
+    # Refresh credentials to get a valid access token
+    if hasattr(_signing_creds, "refresh"):
+        _signing_creds.refresh(auth_requests.Request())
+
+    without_prefix = gcs_uri[5:]  # strip "gs://"
+    slash_idx = without_prefix.find("/")
+    bucket_name = without_prefix[:slash_idx]
+    blob_path = without_prefix[slash_idx + 1:]
+
+    bucket = _gcs_client.bucket(bucket_name)
+    blob = bucket.blob(blob_path)
+    return blob.generate_signed_url(
+        version="v4",
+        expiration=timedelta(hours=1),
+        method="GET",
+        service_account_email=_signing_creds.service_account_email,
+        access_token=_signing_creds.token,
+    )
 
 
 def _get_image_embedding(gcs_uri: str) -> list[float]:
@@ -67,7 +103,7 @@ async def analyze_lesion(
             index_endpoint_name=settings.VERTEX_AI_INDEX_ENDPOINT
         )
         response = endpoint.find_neighbors(
-            deployed_index_id="dermatlas_deployed_index",
+            deployed_index_id="dermatlas_index_v2",
             queries=[embedding],
             num_neighbors=_MAX_RESULTS,
         )
@@ -84,12 +120,21 @@ async def analyze_lesion(
             select(ReferenceAtlas).where(ReferenceAtlas.reference_id == n.id)
         )
         ref = ref_result.scalar_one_or_none()
+
+        # Generate a signed URL so the browser can load the image directly
+        image_url: str | None = None
+        if ref and ref.gcs_image_uri:
+            try:
+                image_url = _get_signed_url(ref.gcs_image_uri)
+            except Exception:
+                logger.warning("Failed to sign URL for %s", ref.gcs_image_uri)
+
         results.append(
             AnalysisResult(
                 reference_id=n.id,
                 diagnosis_label=ref.diagnosis_label if ref else None,
                 score=float(n.distance) if n.distance is not None else 0.0,
-                gcs_uri=ref.gcs_image_uri if ref else None,
+                gcs_uri=image_url,
             )
         )
 
