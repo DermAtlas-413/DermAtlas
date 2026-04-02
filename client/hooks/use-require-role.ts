@@ -10,6 +10,7 @@ import type { UserRole } from "@/types/api";
  */
 export function useRequireRole(requiredRole: UserRole): boolean {
   const user = useAuthStore((s) => s.user);
+  const hydrated = useAuthStore((s) => s._hasHydrated);
 
   return hydrated && !!user && user.role === requiredRole;
 }
