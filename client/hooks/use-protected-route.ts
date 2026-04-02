@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useSegments, useRootNavigationState, useRouter } from "expo-router";
+import { useSegments, useRouter } from "expo-router";
 import { useAuthStore } from "@/state/auth-store";
 
 const PCP_ONLY: string[] = ["upload", "compare", "feedback", "admin"];
@@ -11,19 +11,20 @@ const PATIENT_ONLY: string[] = ["my-cases"];
  * - Authenticated users on the login screen are redirected to their home.
  * - PATIENT users are bounced away from PCP-only routes (and vice-versa).
  *
- * Individual screens also call useRequireRole for defense-in-depth, but this
- * hook fires before any screen renders, providing a consistent first-layer guard.
+ * Waits for zustand persist rehydration (_hasHydrated) before making any
+ * redirect decisions so that a valid session in sessionStorage isn't
+ * mistaken for "no user".
  */
 export function useProtectedRoute() {
   const segments = useSegments();
-  const navState = useRootNavigationState();
   const router = useRouter();
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
+  const hydrated = useAuthStore((s) => s._hasHydrated);
 
   useEffect(() => {
-    // Wait until the navigation container is hydrated to avoid premature redirects.
-    if (!navState?.key) return;
+    // Don't redirect until zustand has finished rehydrating from sessionStorage.
+    if (!hydrated) return;
 
     const onLoginScreen = !segments[0];
 
@@ -49,5 +50,5 @@ export function useProtectedRoute() {
       router.replace("/upload");
       return;
     }
-  }, [token, segments, navState?.key, user?.role]);
+  }, [token, segments, user?.role, hydrated]);
 }
