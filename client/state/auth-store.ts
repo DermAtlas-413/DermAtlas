@@ -30,6 +30,21 @@ export const useAuthStore = create<AuthState>()(
     {
       name: "dermatlas-auth",
       storage: createJSONStorage(() => safeSessionStorage),
+      partialize: (state) => ({
+        token: state.token,
+        user: state.user,
+        lastActivity: state.lastActivity,
+      }),
     }
   )
 );
+
+// Use zustand v5's official persist API to track hydration reliably.
+// onRehydrateStorage can be flaky, but onFinishHydration always fires.
+useAuthStore.persist.onFinishHydration(() => {
+  useAuthStore.setState({ _hasHydrated: true });
+});
+// If hydration already completed synchronously before the listener registered:
+if (useAuthStore.persist.hasHydrated()) {
+  useAuthStore.setState({ _hasHydrated: true });
+}
