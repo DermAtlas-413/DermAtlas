@@ -1,5 +1,12 @@
 export type UserRole = "PCP" | "PATIENT";
 
+/** Human-friendly role label for display in headers and badges. */
+export function displayRole(role: UserRole | string | undefined): string {
+  if (role === "PCP") return "Physician";
+  if (role === "PATIENT") return "Patient";
+  return role ?? "—";
+}
+
 export interface UserInfo {
   userId: string;
   email: string;

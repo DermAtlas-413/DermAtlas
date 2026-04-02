@@ -12,8 +12,10 @@ import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useAuthStore } from "@/state/auth-store";
+import { useRequireRole } from "@/hooks/use-require-role";
 import { getMyPatientCases } from "@/services/patient-service";
 import type { ClinicalImageSummary, PatientMeResponse } from "@/types/api";
+import { displayRole } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
 
 function formatDate(isoStr: string | null): string {
@@ -30,6 +32,7 @@ function formatDate(isoStr: string | null): string {
 }
 
 export default function MyCases() {
+  const authorized = useRequireRole("PATIENT");
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
@@ -38,6 +41,7 @@ export default function MyCases() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!authorized) return;
     setError(null);
     getMyPatientCases()
       .then(setData)
@@ -45,7 +49,9 @@ export default function MyCases() {
         setError(err instanceof Error ? err.message : "Failed to load cases.");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [authorized]);
+
+  if (!authorized) return null;
 
   const displayName = user?.fullName ?? "—";
   const initials =
@@ -73,7 +79,7 @@ export default function MyCases() {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>My Cases</Text>
           <Text style={styles.headerSubtitle}>
-            {displayName} · {user?.role ?? "—"}
+            {displayName} · {displayRole(user?.role)}
           </Text>
         </View>
         <View style={styles.headerRight}>
@@ -109,7 +115,7 @@ export default function MyCases() {
                     size={11}
                     color={D.primary}
                   />
-                  <Text style={styles.badgeText}>Patient</Text>
+                  <Text style={styles.badgeText}>{displayRole(user?.role)}</Text>
                 </View>
               </View>
               <Text style={styles.profileEmail}>{user?.email ?? "—"}</Text>

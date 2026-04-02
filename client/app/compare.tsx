@@ -12,12 +12,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useAuthStore } from "@/state/auth-store";
+import { useRequireRole } from "@/hooks/use-require-role";
 import { analyzeLesion } from "@/services/lesion-service";
 import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
 import type { AnalyzeMatch } from "@/types/api";
+import { displayRole } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Compare() {
+  const authorized = useRequireRole("PCP");
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
@@ -38,6 +41,7 @@ export default function Compare() {
   const patientLabel = decodedPatientName || decodedPatientMrn || (patientId ? `ID # ${patientId}` : "—");
 
   useEffect(() => {
+    if (!authorized) return;
     setError(null);
     analyzeLesion(queryId ?? "mock")
       .then((res) => setMatches(res.results))
@@ -45,7 +49,9 @@ export default function Compare() {
         setError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
       })
       .finally(() => setLoading(false));
-  }, [queryId]);
+  }, [queryId, authorized]);
+
+  if (!authorized) return null;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -57,7 +63,7 @@ export default function Compare() {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Analysis Results</Text>
           <Text style={styles.headerSubtitle}>
-            {user?.fullName ?? "—"} · {user?.role ?? "—"}
+            {user?.fullName ?? "—"} · {displayRole(user?.role)}
           </Text>
         </View>
         <View style={styles.headerRight}>
@@ -92,7 +98,14 @@ export default function Compare() {
               size={14}
               color={D.primary}
             />
-            <Text style={styles.patientText}>Patient: {patientLabel}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.patientText}>Patient: {patientLabel}</Text>
+              {decodedPatientMrn && decodedPatientName ? (
+                <Text style={styles.patientMeta}>{decodedPatientMrn} · ID #{patientId}</Text>
+              ) : patientId ? (
+                <Text style={styles.patientMeta}>ID #{patientId}</Text>
+              ) : null}
+            </View>
           </View>
 
           {/* Submitted image */}
@@ -328,6 +341,7 @@ const styles = StyleSheet.create({
     borderColor: D.border,
   },
   patientText: { color: D.text, fontSize: 13, fontWeight: "600" },
+  patientMeta: { color: D.muted, fontSize: 11, fontWeight: "500", marginTop: 2 },
 
   errorBanner: {
     flexDirection: "row",

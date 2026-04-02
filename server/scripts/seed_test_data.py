@@ -78,24 +78,28 @@ PATIENTS = [
     # Dr. Chen's patients (4 — tests multi-patient PCP)
     {
         "physician_email": "sarah.chen@hospital.org",
+        "full_name": "Alice Johnson",
         "mrn_internal": "MRN-2024-001",
         "date_of_birth": "1985-03-15",
         "gender": "female",
     },
     {
         "physician_email": "sarah.chen@hospital.org",
+        "full_name": "Bob Williams",
         "mrn_internal": "MRN-2024-002",
         "date_of_birth": "1972-08-22",
         "gender": "male",
     },
     {
         "physician_email": "sarah.chen@hospital.org",
+        "full_name": "Carol Davis",
         "mrn_internal": "MRN-2024-003",
         "date_of_birth": "1990-11-07",
         "gender": "female",
     },
     {
         "physician_email": "sarah.chen@hospital.org",
+        "full_name": "David Martinez",
         "mrn_internal": "MRN-2024-004",
         "date_of_birth": "1968-01-30",
         "gender": "male",
@@ -103,12 +107,14 @@ PATIENTS = [
     # Dr. Patel's patients (2 — tests moderate load)
     {
         "physician_email": "james.patel@hospital.org",
+        "full_name": "Eva Thompson",
         "mrn_internal": "MRN-2024-005",
         "date_of_birth": "1995-06-18",
         "gender": "female",
     },
     {
         "physician_email": "james.patel@hospital.org",
+        "full_name": "Frank Wilson",
         "mrn_internal": "MRN-2024-006",
         "date_of_birth": "1983-12-03",
         "gender": "male",
@@ -116,6 +122,7 @@ PATIENTS = [
     # Dr. Garcia's patient (1 — tests single-patient PCP)
     {
         "physician_email": "maria.garcia@hospital.org",
+        "full_name": "Grace Lee",
         "mrn_internal": "MRN-2024-007",
         "date_of_birth": "2001-09-25",
         "gender": "female",
@@ -166,9 +173,10 @@ def build_sql() -> str:
     lines.append("-- ============================================================")
     for pt in PATIENTS:
         lines.append(dedent(f"""\
-            INSERT INTO patients (primary_physician_id, mrn_internal, date_of_birth, gender)
+            INSERT INTO patients (primary_physician_id, full_name, mrn_internal, date_of_birth, gender)
             VALUES (
                 (SELECT user_id FROM users WHERE email = '{pt["physician_email"]}'),
+                '{pt["full_name"]}',
                 '{pt["mrn_internal"]}',
                 '{pt["date_of_birth"]}',
                 '{pt["gender"]}'

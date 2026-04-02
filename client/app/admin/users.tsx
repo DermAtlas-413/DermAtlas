@@ -22,9 +22,11 @@ import {
   updateUser,
   deactivateUser,
 } from "@/services/user-service";
+import { useRequireRole } from "@/hooks/use-require-role";
 import { UserFormModal } from "@/components/user-form-modal";
 
 export default function ManageUsers() {
+  const authorized = useRequireRole("PCP");
   const router = useRouter();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,8 +36,11 @@ export default function ManageUsers() {
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
 
   useEffect(() => {
+    if (!authorized) return;
     loadUsers();
-  }, []);
+  }, [authorized]);
+
+  if (!authorized) return null;
 
   async function loadUsers() {
     setLoading(true);

@@ -13,11 +13,14 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { submitFeedback } from "@/services/feedback-service";
 import { useAuthStore } from "@/state/auth-store";
+import { useRequireRole } from "@/hooks/use-require-role";
 import { ComparisonModal } from "@/components/comparison-modal";
 import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
+import { displayRole } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Feedback() {
+  const authorized = useRequireRole("PCP");
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
@@ -42,6 +45,8 @@ export default function Feedback() {
   const [vote, setVote] = useState<"up" | "down" | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [compareVisible, setCompareVisible] = useState(false);
+
+  if (!authorized) return null;
 
   const uploadedSource = imageUri
     ? { uri: decodeURIComponent(imageUri) }
@@ -77,7 +82,7 @@ export default function Feedback() {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Similar Case · Match #{matchId ?? "—"}</Text>
           <Text style={styles.headerSubtitle}>
-            {user?.fullName ?? "—"} · {user?.role ?? "—"}
+            {user?.fullName ?? "—"} · {displayRole(user?.role)}
           </Text>
         </View>
         <View style={styles.headerRight}>
