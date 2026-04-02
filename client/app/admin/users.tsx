@@ -20,16 +20,14 @@ import {
   getUsers,
   createUser,
   updateUser,
-  deleteUser,
+  deactivateUser,
 } from "@/services/user-service";
-import { useAuthStore } from "@/state/auth-store";
 import { useRequireRole } from "@/hooks/use-require-role";
 import { UserFormModal } from "@/components/user-form-modal";
 
 export default function ManageUsers() {
   const authorized = useRequireRole("PCP");
   const router = useRouter();
-  const currentUser = useAuthStore((s) => s.user);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,9 +57,8 @@ export default function ManageUsers() {
 
   const filtered = users.filter(
     (u) =>
-      u.user_id !== currentUser?.userId &&
-      (u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-       u.email.toLowerCase().includes(search.toLowerCase()))
+      u.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      u.email.toLowerCase().includes(search.toLowerCase())
   );
 
   function openCreate() {
@@ -84,21 +81,25 @@ export default function ManageUsers() {
     }
   }
 
-  function confirmDelete(user: AdminUser) {
+  function confirmDeactivate(user: AdminUser) {
     Alert.alert(
-      "Delete User",
-      `Are you sure you want to permanently delete ${user.full_name}? This action cannot be undone.`,
+      "Deactivate User",
+      `Deactivate account for ${user.full_name}? They will lose access immediately.`,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete",
+          text: "Deactivate",
           style: "destructive",
           onPress: async () => {
             try {
-              await deleteUser(user.user_id);
-              setUsers((prev) => prev.filter((u) => u.user_id !== user.user_id));
+              await deactivateUser(user.user_id);
+              setUsers((prev) =>
+                prev.map((u) =>
+                  u.user_id === user.user_id ? { ...u, is_active: false } : u
+                )
+              );
             } catch (err: unknown) {
-              Alert.alert("Error", err instanceof Error ? err.message : "Failed to delete user.");
+              Alert.alert("Error", err instanceof Error ? err.message : "Failed.");
             }
           },
         },
@@ -107,9 +108,15 @@ export default function ManageUsers() {
   }
 
   function showMobileActions(user: AdminUser) {
+    const options: string[] = ["Edit"];
+    if (user.is_active) options.push("Deactivate");
+    options.push("Cancel");
+
     Alert.alert(user.full_name, undefined, [
       { text: "Edit", onPress: () => openEdit(user) },
-      { text: "Delete", style: "destructive" as const, onPress: () => confirmDelete(user) },
+      ...(user.is_active
+        ? [{ text: "Deactivate", style: "destructive" as const, onPress: () => confirmDeactivate(user) }]
+        : []),
       { text: "Cancel", style: "cancel" },
     ]);
   }
@@ -155,7 +162,7 @@ export default function ManageUsers() {
           search={search}
           onSearchChange={setSearch}
           onEdit={openEdit}
-          onDelete={confirmDelete}
+          onDeactivate={confirmDeactivate}
         />
       ) : (
         <MobileUserList
@@ -188,13 +195,13 @@ function WebUserList({
   search,
   onSearchChange,
   onEdit,
-  onDelete,
+  onDeactivate,
 }: {
   users: AdminUser[];
   search: string;
   onSearchChange: (v: string) => void;
   onEdit: (u: AdminUser) => void;
-  onDelete: (u: AdminUser) => void;
+  onDeactivate: (u: AdminUser) => void;
 }) {
   return (
     <ScrollView contentContainerStyle={styles.webContainer}>
@@ -240,7 +247,7 @@ function WebUserList({
               user={user}
               isLast={idx === users.length - 1}
               onEdit={() => onEdit(user)}
-              onDelete={() => onDelete(user)}
+              onDeactivate={() => onDeactivate(user)}
             />
           ))
         )}
@@ -253,12 +260,12 @@ function WebTableRow({
   user,
   isLast,
   onEdit,
-  onDelete,
+  onDeactivate,
 }: {
   user: AdminUser;
   isLast: boolean;
   onEdit: () => void;
-  onDelete: () => void;
+  onDeactivate: () => void;
 }) {
   return (
     <Pressable
@@ -302,16 +309,18 @@ function WebTableRow({
         >
           <MaterialCommunityIcons name="pencil-outline" size={17} color={D.primary} />
         </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.iconBtn,
-            styles.iconBtnDanger,
-            pressed && styles.iconBtnPressed,
-          ]}
-          onPress={onDelete}
-        >
-          <MaterialCommunityIcons name="trash-can-outline" size={17} color={D.danger} />
-        </Pressable>
+        {user.is_active && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.iconBtn,
+              styles.iconBtnDanger,
+              pressed && styles.iconBtnPressed,
+            ]}
+            onPress={onDeactivate}
+          >
+            <MaterialCommunityIcons name="account-off-outline" size={17} color={D.danger} />
+          </Pressable>
+        )}
       </View>
     </Pressable>
   );
