@@ -21,27 +21,31 @@ export default function Compare() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
-  const { queryId, imageUri } = useLocalSearchParams<{
+  const { queryId, imageUri, patientId, patientMrn, patientName } = useLocalSearchParams<{
     queryId?: string;
     imageUri?: string;
+    patientId?: string;
+    patientMrn?: string;
+    patientName?: string;
   }>();
   const [matches, setMatches] = useState<AnalyzeMatch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const decodedImageUri = imageUri ? decodeURIComponent(imageUri) : null;
+  const decodedPatientName = patientName ? decodeURIComponent(patientName) : "";
+  const decodedPatientMrn = patientMrn ? decodeURIComponent(patientMrn) : "";
+  const patientLabel = decodedPatientName || decodedPatientMrn || (patientId ? `ID # ${patientId}` : "—");
 
   useEffect(() => {
+    setError(null);
     analyzeLesion(queryId ?? "mock")
       .then((res) => setMatches(res.results))
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
+      })
       .finally(() => setLoading(false));
   }, [queryId]);
-
-  function navigateToFeedback(m: AnalyzeMatch) {
-    const similarity = Math.round(m.score * 100);
-    router.push(
-      `/feedback?matchId=${m.reference_id}&queryId=${queryId ?? ""}&referenceId=${m.reference_id}&diagnosis=${encodeURIComponent(m.diagnosis_label ?? "")}&similarity=${similarity}&imageUri=${encodeURIComponent(decodedImageUri ?? "")}&referenceImageUri=${encodeURIComponent(m.gcs_uri ?? "")}`
-    );
-  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -88,7 +92,7 @@ export default function Compare() {
               size={14}
               color={D.primary}
             />
-            <Text style={styles.patientText}>Patient ID # ______</Text>
+            <Text style={styles.patientText}>Patient: {patientLabel}</Text>
           </View>
 
           {/* Submitted image */}
@@ -103,6 +107,14 @@ export default function Compare() {
             </View>
           </View>
 
+          {/* Error banner */}
+          {error && (
+            <View style={styles.errorBanner}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={18} color={D.danger} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
           {/* Similar cases */}
           <View>
             <Text style={styles.sectionLabel}>
@@ -115,74 +127,110 @@ export default function Compare() {
               <ActivityIndicator size="large" color={D.primary} style={{ marginTop: 20 }} />
             ) : (
             <View style={styles.grid}>
-              {matches.map((m) => {
-                const similarity = Math.round(m.score * 100);
-                return (
-                <Pressable
+              {matches.map((m) => (
+                <MatchCard
                   key={m.reference_id}
-                  style={({ pressed }) => [
-                    styles.matchCard,
-                    pressed && styles.matchCardPressed,
-                  ]}
-                  onPress={() => navigateToFeedback(m)}
-                >
-                  <View style={styles.matchImage}>
-                    <Image
-                      source={
-                        m.gcs_uri
-                          ? { uri: m.gcs_uri }
-                          : (DEMO_IMAGES[m.reference_id] ?? null)
-                      }
-                      style={styles.matchImageFill}
-                      contentFit="cover"
-                    />
-                  </View>
-
-                  <View style={styles.matchBody}>
-                    <View style={styles.matchTopRow}>
-                      <SimilarityBadge value={similarity} />
-                      <View style={styles.voteRow}>
-                        <Pressable hitSlop={8} onPress={() => {}}>
-                          <MaterialCommunityIcons
-                            name="thumb-up-outline"
-                            size={15}
-                            color={D.muted}
-                          />
-                        </Pressable>
-                        <Pressable hitSlop={8} onPress={() => {}}>
-                          <MaterialCommunityIcons
-                            name="thumb-down-outline"
-                            size={15}
-                            color={D.muted}
-                          />
-                        </Pressable>
-                      </View>
-                    </View>
-
-                    <SimilarityBar value={similarity} />
-
-                    <Text style={styles.matchDiag} numberOfLines={2}>
-                      {m.diagnosis_label ?? "Unknown"}
-                    </Text>
-
-                    <View style={styles.viewMoreRow}>
-                      <Text style={styles.viewMoreText}>View details</Text>
-                      <MaterialCommunityIcons
-                        name="chevron-right"
-                        size={13}
-                        color={D.primary}
-                      />
-                    </View>
-                  </View>
-                </Pressable>
-                );
-              })}
+                  m={m}
+                  queryId={queryId}
+                  decodedImageUri={decodedImageUri}
+                  onPress={() => {
+                    const similarity = Math.round(m.score * 100);
+                    router.push(
+                      `/feedback?matchId=${m.reference_id}&queryId=${queryId ?? ""}&referenceId=${m.reference_id}&diagnosis=${encodeURIComponent(m.diagnosis_label ?? "")}&similarity=${similarity}&imageUri=${encodeURIComponent(decodedImageUri ?? "")}&referenceImageUri=${encodeURIComponent(m.gcs_uri ?? "")}`
+                    );
+                  }}
+                />
+              ))}
             </View>
             )}
           </View>
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function MatchCard({
+  m,
+  queryId: _queryId,
+  decodedImageUri: _decodedImageUri,
+  onPress,
+}: {
+  m: AnalyzeMatch;
+  queryId: string | undefined;
+  decodedImageUri: string | null;
+  onPress: () => void;
+}) {
+  const [imgError, setImgError] = useState(false);
+  const similarity = Math.round(m.score * 100);
+  const imgSource = imgError
+    ? null
+    : m.gcs_uri
+    ? { uri: m.gcs_uri }
+    : (DEMO_IMAGES[m.reference_id] ?? null);
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.matchCard,
+        pressed && styles.matchCardPressed,
+      ]}
+      onPress={onPress}
+    >
+      <View style={styles.matchImage}>
+        {imgSource ? (
+          <Image
+            source={imgSource}
+            style={styles.matchImageFill}
+            contentFit="cover"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <MaterialCommunityIcons
+            name="image-off-outline"
+            size={32}
+            color={D.border}
+          />
+        )}
+      </View>
+
+      <View style={styles.matchBody}>
+        <View style={styles.matchTopRow}>
+          <SimilarityBadge value={similarity} />
+          <View style={styles.voteRow}>
+            <Pressable hitSlop={8} onPress={() => {}}>
+              <MaterialCommunityIcons
+                name="thumb-up-outline"
+                size={15}
+                color={D.muted}
+              />
+            </Pressable>
+            <Pressable hitSlop={8} onPress={() => {}}>
+              <MaterialCommunityIcons
+                name="thumb-down-outline"
+                size={15}
+                color={D.muted}
+              />
+            </Pressable>
+          </View>
+        </View>
+
+        <SimilarityBar value={similarity} />
+
+        <Text style={styles.matchDiag} numberOfLines={2}>
+          {m.diagnosis_label ?? "Unknown"}
+        </Text>
+
+        <View style={styles.viewMoreRow}>
+          <Text style={styles.viewMoreText}>View details</Text>
+          <MaterialCommunityIcons
+            name="chevron-right"
+            size={13}
+            color={D.primary}
+          />
+        </View>
+      </View>
+    </Pressable>
   );
 }
 
@@ -280,6 +328,19 @@ const styles = StyleSheet.create({
     borderColor: D.border,
   },
   patientText: { color: D.text, fontSize: 13, fontWeight: "600" },
+
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: D.dangerBg,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: D.danger,
+  },
+  errorText: { color: D.danger, fontSize: 13, fontWeight: "600", flex: 1 },
 
   sectionLabel: {
     fontSize: 13,

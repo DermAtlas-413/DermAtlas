@@ -1,6 +1,15 @@
-import type { TokenResponse, UserInfo } from "@/types/api";
+import type { TokenResponse, UserInfo, UserRole } from "@/types/api";
 import { useAuthStore } from "@/state/auth-store";
 import { apiFetch, USE_MOCK, delay } from "./http";
+
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  try {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(base64));
+  } catch {
+    return {};
+  }
+}
 
 export async function login(
   email: string,
@@ -8,11 +17,14 @@ export async function login(
 ): Promise<{ token: string; user: UserInfo }> {
   if (USE_MOCK) {
     await delay(500);
+    const mockRole: UserRole = email.toLowerCase().includes("patient")
+      ? "PATIENT"
+      : "PCP";
     const mockUser: UserInfo = {
       userId: "1",
       email: email || "clinician@hospital.com",
       fullName: email ? `Dr. ${email.split("@")[0]}` : "Dr. Quach",
-      role: "PCP",
+      role: mockRole,
     };
     const mockToken = "mock-token";
     useAuthStore.getState().setAuth(mockToken, mockUser);
@@ -26,12 +38,12 @@ export async function login(
     body: body.toString(),
   });
 
-  // Derive user info from the email since the token endpoint doesn't return it
+  const payload = decodeJwtPayload(tokenRes.access_token);
   const user: UserInfo = {
-    userId: email,
-    email,
-    fullName: email.split("@")[0],
-    role: "PCP",
+    userId: String(payload.sub ?? email),
+    email: String(payload.email ?? email),
+    fullName: String(payload.full_name ?? email.split("@")[0]),
+    role: ((payload.role as UserRole) ?? "PCP"),
   };
 
   useAuthStore.getState().setAuth(tokenRes.access_token, user);

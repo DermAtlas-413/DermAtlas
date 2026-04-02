@@ -49,7 +49,7 @@ export default function Upload() {
       const blob = await response.blob();
       const res = await uploadImage(blob, selectedPatient.patient_id, "unspecified");
       router.push(
-        `/compare?queryId=${encodeURIComponent(res.query_id)}&imageUri=${encodeURIComponent(imageUri)}&patientId=${encodeURIComponent(selectedPatient.patient_id)}`
+        `/compare?queryId=${encodeURIComponent(res.query_id)}&imageUri=${encodeURIComponent(imageUri)}&patientId=${encodeURIComponent(selectedPatient.patient_id)}&patientMrn=${encodeURIComponent(selectedPatient.mrn_internal)}&patientName=${encodeURIComponent(selectedPatient.full_name ?? "")}`
       );
     } catch (err) {
       Alert.alert("Upload failed", err instanceof Error ? err.message : "Please try again.");

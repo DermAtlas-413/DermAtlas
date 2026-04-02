@@ -27,8 +27,8 @@ export default function Index() {
     setError(null);
     setLoading(true);
     try {
-      await login(username, password);
-      router.replace("/upload");
+      const { user } = await login(username, password);
+      router.replace(user.role === "PATIENT" ? "/my-cases" : "/upload");
     } catch (e: unknown) {
       const msg =
         e instanceof Error ? e.message : "Login failed. Please try again.";

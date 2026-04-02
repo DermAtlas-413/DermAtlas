@@ -62,7 +62,7 @@ async def init_db_engine() -> None:
 
     settings = get_settings()
     if settings.USE_CLOUD_SQL_CONNECTOR:
-        engine = await _build_cloud_sql_engine(settings)
+        engine = _build_cloud_sql_engine(settings)
     else:
         engine = _build_direct_engine(settings)
 
@@ -85,4 +85,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     if AsyncSessionLocal is None:
         raise RuntimeError("Database engine not initialised. Call init_db_engine() first.")
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

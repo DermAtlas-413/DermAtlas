@@ -46,7 +46,16 @@ export interface ClinicalImageSummary {
 export interface PatientResponse {
   patient_id: number;
   mrn_internal: string;
+  full_name: string;
   date_of_birth: string;
   gender: string;
+  clinical_images: ClinicalImageSummary[];
+}
+
+// GET /patients/me
+export interface PatientMeResponse {
+  user_id: number;
+  full_name: string;
+  email: string;
   clinical_images: ClinicalImageSummary[];
 }
