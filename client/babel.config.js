@@ -1,7 +1,7 @@
 module.exports = function (api) {
   api.cache(true);
   return {
-    presets: ["babel-preset-expo"],
+    presets: [["babel-preset-expo", { "react-compiler": false }]],
     plugins: [
       // Zustand v5 references import.meta.env.MODE which isn't valid in
       // non-module scripts. Replace it with process.env.NODE_ENV which
