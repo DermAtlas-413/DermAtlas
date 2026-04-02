@@ -20,10 +20,11 @@ export function useProtectedRoute() {
   const router = useRouter();
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
+  const hydrated = useAuthStore((s) => s._hasHydrated);
 
   useEffect(() => {
-    // Wait until the navigation container is hydrated to avoid premature redirects.
-    if (!navState?.key) return;
+    // Wait until both the navigation container and zustand persist are hydrated.
+    if (!navState?.key || !hydrated) return;
 
     const onLoginScreen = !segments[0];
 
@@ -49,5 +50,5 @@ export function useProtectedRoute() {
       router.replace("/upload");
       return;
     }
-  }, [token, segments, navState?.key, user?.role]);
+  }, [token, segments, navState?.key, user?.role, hydrated]);
 }
