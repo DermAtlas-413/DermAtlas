@@ -19,6 +19,9 @@ export async function apiFetch<T>(
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      useAuthStore.getState().clearAuth();
+    }
     throw new Error(body?.detail ?? `Request failed (${res.status})`);
   }
   return res.json();

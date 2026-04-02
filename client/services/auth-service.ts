@@ -43,7 +43,7 @@ export async function login(
     userId: String(payload.sub ?? email),
     email: String(payload.email ?? email),
     fullName: String(payload.full_name ?? email.split("@")[0]),
-    role: ((payload.role as UserRole) ?? "PCP"),
+    role: ((payload.role as UserRole) ?? "PATIENT"),
   };
 
   useAuthStore.getState().setAuth(tokenRes.access_token, user);
