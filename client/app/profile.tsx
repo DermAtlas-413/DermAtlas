@@ -10,6 +10,7 @@ import {
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuthStore } from "@/state/auth-store";
+import { displayRole } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
@@ -21,8 +22,7 @@ export default function Profile() {
 
   const displayName = user?.fullName ?? "—";
   const displayUsername = user?.email ?? "—";
-  const displayRole =
-    user?.role === "PCP" ? "PCP, Admin" : user?.role ?? "—";
+  const roleLabel = displayRole(user?.role);
 
   const initials =
     displayName !== "—"
@@ -61,7 +61,7 @@ export default function Profile() {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Profile</Text>
           <Text style={styles.headerSubtitle}>
-            {user?.fullName ?? "—"} · {user?.role ?? "—"}
+            {user?.fullName ?? "—"} · {roleLabel}
           </Text>
         </View>
         <Pressable style={styles.headerBtnAlt} onPress={handleLogout}>
@@ -85,7 +85,7 @@ export default function Profile() {
                     size={11}
                     color={D.primary}
                   />
-                  <Text style={styles.badgeText}>{displayRole}</Text>
+                  <Text style={styles.badgeText}>{roleLabel}</Text>
                 </View>
               </View>
               <Text style={styles.profileUsername}>{displayUsername}</Text>

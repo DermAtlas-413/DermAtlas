@@ -16,6 +16,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { DermAtlasColors as D } from "@/constants/theme";
 import type { AuditLogEntry } from "@/types/admin";
 import { getAuditLogs } from "@/services/audit-service";
+import { useRequireRole } from "@/hooks/use-require-role";
 
 type DateFilter = "today" | "7d" | "30d" | "all";
 
@@ -42,6 +43,7 @@ function getDateRange(filter: DateFilter): { from?: string; to?: string } {
 const PAGE_SIZE = 20;
 
 export default function AuditLogs() {
+  const authorized = useRequireRole("PCP");
   const router = useRouter();
 
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
@@ -56,6 +58,7 @@ export default function AuditLogs() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!authorized) return;
     setPage(1);
     setEntries([]);
     setLoading(true);
@@ -75,7 +78,9 @@ export default function AuditLogs() {
         setError(err instanceof Error ? err.message : "Failed to load audit logs.");
       })
       .finally(() => setLoading(false));
-  }, [dateFilter, actionSearch]);
+  }, [dateFilter, actionSearch, authorized]);
+
+  if (!authorized) return null;
 
   async function fetchPage(p: number, reset: boolean) {
     if (reset) {

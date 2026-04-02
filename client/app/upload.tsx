@@ -13,13 +13,16 @@ import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useAuthStore } from "@/state/auth-store";
+import { useRequireRole } from "@/hooks/use-require-role";
 import { uploadImage } from "@/services/upload-service";
 import { useImageCapture } from "@/hooks/use-image-capture";
 import { PatientSelector } from "@/components/patient-selector";
 import type { PatientResponse } from "@/types/api";
+import { displayRole } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Upload() {
+  const authorized = useRequireRole("PCP");
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
@@ -28,6 +31,8 @@ export default function Upload() {
   const [uploading, setUploading] = useState(false);
 
   const { pickFromCamera, pickFromLibrary } = useImageCapture(setImageUri);
+
+  if (!authorized) return null;
 
   function handleLogout() {
     clearAuth();
@@ -66,7 +71,7 @@ export default function Upload() {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>New Case</Text>
           <Text style={styles.headerSubtitle}>
-            {user?.fullName ?? "—"} · {user?.role ?? "—"}
+            {user?.fullName ?? "—"} · {displayRole(user?.role)}
           </Text>
         </View>
         <View style={styles.headerRight}>
