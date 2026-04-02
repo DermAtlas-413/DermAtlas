@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useSegments, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { useSegments, useRouter, useNavigationContainerRef } from "expo-router";
 import { useAuthStore } from "@/state/auth-store";
 
 const PCP_ONLY: string[] = ["upload", "compare", "feedback", "admin"];
@@ -7,24 +7,32 @@ const PATIENT_ONLY: string[] = ["my-cases"];
 
 /**
  * Global auth + role guard. Call once from the root layout.
- * - Unauthenticated users are redirected to "/" for any protected route.
- * - Authenticated users on the login screen are redirected to their home.
- * - PATIENT users are bounced away from PCP-only routes (and vice-versa).
- *
- * Waits for zustand persist rehydration (_hasHydrated) before making any
- * redirect decisions so that a valid session in sessionStorage isn't
- * mistaken for "no user".
+ * Waits for both navigation mount and zustand rehydration before redirecting.
  */
 export function useProtectedRoute() {
   const segments = useSegments();
   const router = useRouter();
+  const navRef = useNavigationContainerRef();
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
   const hydrated = useAuthStore((s) => s._hasHydrated);
 
+  const [navReady, setNavReady] = useState(false);
+
   useEffect(() => {
-    // Don't redirect until zustand has finished rehydrating from sessionStorage.
-    if (!hydrated) return;
+    if (navRef?.isReady) {
+      setNavReady(true);
+      return;
+    }
+    // Listen for when navigation becomes ready
+    const unsubscribe = navRef?.addListener?.("state", () => {
+      if (navRef.isReady) setNavReady(true);
+    });
+    return () => { unsubscribe?.(); };
+  }, [navRef, navRef?.isReady]);
+
+  useEffect(() => {
+    if (!hydrated || !navReady) return;
 
     const onLoginScreen = !segments[0];
 
@@ -33,7 +41,6 @@ export function useProtectedRoute() {
       return;
     }
 
-    // Authenticated user on the login screen → send to their home route.
     if (onLoginScreen) {
       router.replace(user?.role === "PATIENT" ? "/my-cases" : "/upload");
       return;
@@ -44,11 +51,9 @@ export function useProtectedRoute() {
 
     if (user?.role === "PATIENT" && PCP_ONLY.includes(prefix)) {
       router.replace("/my-cases");
-      return;
     }
     if (user?.role === "PCP" && PATIENT_ONLY.includes(prefix)) {
       router.replace("/upload");
-      return;
     }
-  }, [token, segments, user?.role, hydrated]);
+  }, [token, segments, user?.role, hydrated, navReady]);
 }
