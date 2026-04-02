@@ -1,0 +1,1012 @@
+\documentclass[aspectratio=169, 9pt]{beamer}
+
+% ── Theme ─────────────────────────────────────────────────────────────────────
+\usetheme{Madrid}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+% ── Fonts & encoding ──────────────────────────────────────────────────────────
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+
+% ── Math ──────────────────────────────────────────────────────────────────────
+\usepackage{amsmath, amssymb}
+
+% ── Tables ────────────────────────────────────────────────────────────────────
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+
+% ── Graphics ──────────────────────────────────────────────────────────────────
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, backgrounds}
+
+% ── Misc ──────────────────────────────────────────────────────────────────────
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{xcolor}
+
+% ── Color palette ─────────────────────────────────────────────────────────────
+\definecolor{navyblue}{HTML}{1A237E}
+\definecolor{medblue}{HTML}{1565C0}
+\definecolor{teal}{HTML}{00695C}
+\definecolor{purple}{HTML}{6A1B9A}
+\definecolor{orange}{HTML}{E65100}
+\definecolor{darkred}{HTML}{B71C1C}
+\definecolor{darkgreen}{HTML}{1B5E20}
+\definecolor{lightgray}{HTML}{F5F5F5}
+\definecolor{warnorange}{HTML}{E65100}
+\definecolor{warnbg}{HTML}{FFF3E0}
+
+% ── Beamer colors ─────────────────────────────────────────────────────────────
+\setbeamercolor{frametitle}{bg=navyblue, fg=white}
+\setbeamercolor{title}{fg=white}
+\setbeamercolor{author}{fg=white}
+\setbeamercolor{date}{fg=white}
+\setbeamercolor{structure}{fg=navyblue}
+\setbeamercolor{titlelike}{bg=navyblue}
+\setbeamercolor{palette primary}{bg=navyblue, fg=white}
+\setbeamercolor{palette secondary}{bg=medblue, fg=white}
+\setbeamercolor{palette tertiary}{bg=navyblue!80, fg=white}
+
+% ── Custom block colors ───────────────────────────────────────────────────────
+\setbeamercolor{block title}{bg=navyblue, fg=white}
+\setbeamercolor{block body}{bg=lightgray, fg=black}
+\setbeamercolor{alertblock title}{bg=darkred, fg=white}
+\setbeamercolor{alertblock body}{bg=darkred!8, fg=black}
+\setbeamercolor{exampleblock title}{bg=teal, fg=white}
+\setbeamercolor{exampleblock body}{bg=teal!8, fg=black}
+
+% ── Helper: colored pill badge ────────────────────────────────────────────────
+\newcommand{\badge}[2]{%
+  \tikz[baseline=(n.base)]\node[fill=#1, text=white,
+    rounded corners=3pt, inner sep=3pt, font=\scriptsize\bfseries](n){#2};}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\title[DermAtlas ML Pipeline]{\textbf{DermAtlas}\\Clinical Decision Support for Dermatology}
+\subtitle{ML Pipeline --- Progress Presentation}
+\author{DermAtlas Team}
+\date{}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 1 — Data Sources
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 1 — Building the Training Dataset}
+
+  \begin{columns}[T]
+
+    %% ── Left: three dataset cards ──────────────────────────────────────────
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{navyblue}Why these three datasets?}\\[0.4em]
+      The largest publicly available, histologically confirmed dermoscopy collections.
+      Together they cover all 6 target classes.
+
+      \vspace{0.6em}
+      \begin{block}{HAM10000}
+        \small 9,873 images · Vienna \& Brisbane\\
+        Histologically confirmed · 6 classes
+      \end{block}
+
+      \vspace{0.3em}
+      \begin{block}{ISIC 2019}
+        \small 14,774 images · Multi-center\\
+        6-class labeled · international cohort
+      \end{block}
+
+      \vspace{0.3em}
+      \begin{block}{ISIC 2020}
+        \small 33,126 images · Multi-center\\
+        \textasciitilde6,000 labeled mel + 27,126 unknown benign
+      \end{block}
+
+      \vspace{0.5em}
+      \textbf{Output:} \texttt{unified\_metadata.csv}\\
+      {\small 57,773 rows · 13 columns}
+    \end{column}
+
+    %% ── Right: metadata schema + shortcomings ──────────────────────────────
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{navyblue}Unified metadata columns}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} ll @{}}
+        \toprule
+        Column & Description \\
+        \midrule
+        \texttt{image\_id}       & Unique image ID \\
+        \texttt{source\_dataset} & ham10000 / isic2019 / isic2020 \\
+        \texttt{mel, nv, bcc}   & Class label (0/1) \\
+        \texttt{akiec, bkl, df} & Class label (0/1) \\
+        \texttt{age, sex}       & Patient demographics \\
+        \texttt{localization}   & Body site \\
+        \texttt{malignant}      & Derived binary label \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.6em}
+      \begin{alertblock}{Shortcomings}
+        \small
+        \begin{itemize}[leftmargin=1em, itemsep=0pt]
+          \item \textbf{Class imbalance} --- only 9,493 malignant vs 48,280 benign
+          \item \textbf{Skin tone bias} --- predominantly light-skinned European / Australian patients
+          \item \textbf{Rare classes} --- df: 239 samples · akiec: 1,064 samples
+          \item \textbf{Potential duplicates} --- ISIC 2019 \& 2020 share image sources
+        \end{itemize}
+      \end{alertblock}
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 2 — Embedding Generation
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 2 --- Turning Images into Numbers}
+
+  \begin{columns}[T]
+
+    %% ── Left: why Vertex AI ───────────────────────────────────────────────
+    \begin{column}{0.50\textwidth}
+      \textbf{\color{navyblue}Why Vertex AI Embeddings?}
+
+      \vspace{0.4em}
+      Images are unstructured --- ML models need fixed-size numeric vectors.
+      Vertex AI \texttt{multimodalembedding@001} gives us exactly that.
+
+      \vspace{0.5em}
+      \begin{exampleblock}{What it does}
+        \small
+        \begin{itemize}[leftmargin=1em, itemsep=0pt]
+          \item Vision Transformer (ViT) backbone
+          \item Produces a \textbf{1408-D float32 vector} per image
+          \item Captures texture, color, shape globally
+          \item No GPU infrastructure needed on our end --- pure API call
+          \item 57,773 images embedded at 600 req/min via GCS pipeline
+        \end{itemize}
+      \end{exampleblock}
+
+      \vspace{0.5em}
+      \textbf{\color{navyblue}Stored on GCS:}\\[0.3em]
+      {\small
+      \begin{tabular}{@{} ll @{}}
+        \texttt{embeddings.npy} & (57773 $\times$ 1408) \\
+        \texttt{labels.npy}     & (57773 $\times$ 6) \\
+        \texttt{image\_ids.npy} & (57773,) \\
+      \end{tabular}
+      }
+    \end{column}
+
+    %% ── Right: limitation + future work ───────────────────────────────────
+    \begin{column}{0.46\textwidth}
+
+      \begin{alertblock}{Key Limitation}
+        \small
+        \texttt{multimodalembedding@001} was trained on \textbf{general internet
+        images}, not dermoscopy. It may miss domain-specific structures:
+        \begin{itemize}[leftmargin=1em, itemsep=0pt]
+          \item Blue--white veils
+          \item Regression areas
+          \item Milia-like cysts
+          \item Dermoscopic pigment networks
+        \end{itemize}
+      \end{alertblock}
+
+      \vspace{0.6em}
+      \begin{block}{Next Steps}
+        \small
+        For the next deadline we are evaluating a switch to a
+        \textbf{dermoscopy-specific foundation model}
+        (e.g.\ SkinGPT, DermFoundation).
+        Domain-specific pretraining would produce richer embeddings
+        and is expected to improve downstream classifier performance
+        --- especially for rare classes like df and akiec.
+      \end{block}
+
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 3 — ML Pipeline Overview
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 3 --- ML Pipeline Overview}
+
+  \vspace{0.3em}
+  \begin{center}
+  \begin{tikzpicture}[
+    node distance = 0.55cm and 0.45cm,
+    box/.style    = {draw, rounded corners=4pt, align=center,
+                     font=\small\bfseries, inner sep=6pt, minimum height=1cm},
+    arr/.style    = {-{Stealth[length=4pt]}, thick, color=navyblue},
+    parr/.style   = {-{Stealth[length=4pt]}, thick, dashed, color=purple},
+  ]
+
+    \node[box, fill=teal!15,    draw=teal]    (emb)    {1408-D\\Embedding};
+    \node[box, fill=purple!15,  draw=purple,  right=of emb]  (cohort) {Cohort\\Deviation};
+    \node[box, fill=orange!15,  draw=orange,  right=of cohort](mlp)   {MLP\\Classifier};
+    \node[box, fill=darkred!15, draw=darkred, right=of mlp]  (xgb)   {XGBoost};
+    \node[box, fill=darkgreen!15,draw=darkgreen,right=of xgb](dec)   {Malignant\\/ Benign};
+
+    \draw[arr] (emb)    -- (cohort);
+    \draw[arr] (cohort) -- (mlp);
+    \draw[arr] (mlp)    -- (xgb);
+    \draw[arr] (xgb)    -- (dec);
+
+    %% parallel KNN path
+    \node[box, fill=medblue!15, draw=medblue,
+          below=0.7cm of xgb] (knn) {KNN / Vector Search\\{\footnotesize top-k similar cases}};
+
+    \draw[parr] (emb.south) -- ++(0,-0.4) -| (knn.west);
+    \draw[parr] (knn.east)  -- ++(0.3,0)  |- (dec.south);
+
+    %% labels above
+    \node[above=0.15cm of cohort, font=\scriptsize\color{purple}]  {ugly duckling};
+    \node[above=0.15cm of mlp,    font=\scriptsize\color{orange}]  {6-class softmax};
+    \node[above=0.15cm of xgb,    font=\scriptsize\color{darkred}] {P(malignant)};
+    \node[above=0.15cm of dec,    font=\scriptsize\color{darkgreen}]{$\tau = 0.20$};
+
+  \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.4em}
+  \begin{columns}[T]
+    \begin{column}{0.30\textwidth}
+      \small\color{purple}\textbf{Cohort Deviation}\\
+      \color{black}\small How different does this lesion look from benign lesions in the same age/sex/site group?
+    \end{column}
+    \begin{column}{0.30\textwidth}
+      \small\color{orange}\textbf{MLP}\\
+      \color{black}\small Compresses 1408-D embedding into a 6-class probability distribution
+    \end{column}
+    \begin{column}{0.30\textwidth}
+      \small\color{darkred}\textbf{XGBoost}\\
+      \color{black}\small Combines softmax + clinical metadata + cohort scores for binary malignancy prediction
+    \end{column}
+  \end{columns}
+
+  \vspace{0.5em}
+  {\small\color{gray} KNN / Vector Search runs in parallel --- retrieves visually similar historical cases for the physician to review alongside the malignancy score.}
+
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 4 — Cohort Deviation / Ugly Duckling
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 4 --- Cohort Deviation: The Ugly Duckling Sign}
+
+  \begin{columns}[T]
+
+    %% ── Left: clinical concept ────────────────────────────────────────────
+    \begin{column}{0.32\textwidth}
+      \textbf{\color{navyblue}Clinical Concept}
+
+      \vspace{0.4em}
+      \small
+      Dermatologists use the \textbf{ugly duckling sign} --- a lesion that looks
+      visually different from the patient's other benign lesions is suspicious.
+
+      \vspace{0.5em}
+      We formalize this computationally:
+      \textit{how far does this image's embedding sit from the benign lesions
+      in the same demographic group?}
+
+      \vspace{0.5em}
+      \begin{exampleblock}{Sanity Check}
+        \small
+        \begin{tabular}{@{}lr@{}}
+          Malignant mean dist & 0.1255 \\
+          Benign mean dist    & 0.0852 \\
+          Ratio               & 1.47$\times$ \textbf{✓} \\
+        \end{tabular}
+      \end{exampleblock}
+    \end{column}
+
+    %% ── Middle: how it works ──────────────────────────────────────────────
+    \begin{column}{0.36\textwidth}
+      \textbf{\color{navyblue}How It Works}
+
+      \vspace{0.4em}
+      \small
+      \textbf{1.} Group train-set benign images by cohort:\\
+      \quad age group $\times$ sex $\times$ body site
+
+      \vspace{0.3em}
+      \begin{tabular}{@{}ll@{}}
+        Age  & young / middle / old \\
+        Sex  & male / female \\
+        Site & back, torso, leg \ldots \\
+      \end{tabular}
+
+      \vspace{0.4em}
+      \textbf{2.} Fallback chain when group too small:\\
+      \quad full key $\to$ age+sex $\to$ age $\to$ global
+
+      \vspace{0.4em}
+      \textbf{3.} PCA $1408 \to 128$ dims, then\\
+      \quad KNN index + LocalOutlierFactor
+
+      \vspace{0.4em}
+      \textbf{4.} Score every image against the\\
+      \quad frozen train-set benign index
+
+      \vspace{0.4em}
+      \textbf{Output (4 features per image):}\\
+      \quad \texttt{knn\_mean\_dist}\\
+      \quad \texttt{knn\_min\_dist}\\
+      \quad \texttt{knn\_std\_dist}\\
+      \quad \texttt{lof\_score}
+    \end{column}
+
+    %% ── Right: key design decisions ───────────────────────────────────────
+    \begin{column}{0.28\textwidth}
+      \textbf{\color{navyblue}Key Design Decisions}
+
+      \vspace{0.4em}
+      \begin{block}{Train-set only}
+        \small Reference pool built from train images only.
+        Test images query a frozen index they never contributed to.
+        \textit{(Fixes data leakage across split boundary.)}
+      \end{block}
+
+      \vspace{0.3em}
+      \begin{block}{Confirmed benign only}
+        \small ISIC 2020 ``unknown'' images excluded.
+        ``Unknown'' $\neq$ confirmed benign --- including them
+        would pollute the reference distribution.
+      \end{block}
+
+      \vspace{0.3em}
+      \begin{alertblock}{Limitation}
+        \small Reference pool is predominantly light-skinned patients.
+        May flag lesions on darker skin as unusual for demographic reasons,
+        not clinical ones.
+      \end{alertblock}
+
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 5 — Dataset Details: Class Distribution & Train/Test Split
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 5 --- Dataset Details: Class Distribution \& Split}
+
+  \begin{columns}[T]
+
+    %% ── Left: class distribution table ─────────────────────────────────────
+    \begin{column}{0.54\textwidth}
+      \textbf{\color{navyblue}Class Distribution (30,647 labeled rows)}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} l r r r @{}}
+        \toprule
+        Class & Count & \% labeled & MLP weight \\
+        \midrule
+        {\color{teal}nv}    & 18,068 & 58.9\% & 0.249 \\
+        {\color{orange}mel} &  5,106 & 16.7\% & 0.881 \\
+        {\color{orange}bcc} &  3,323 & 10.8\% & 1.354 \\
+        {\color{teal}bkl}   &  2,847 &  9.3\% & 1.581 \\
+        {\color{orange}akiec} & 1,064 & 3.5\% & 4.231 \\
+        {\color{teal}df}    &    239 &  0.8\% & 18.85 \\
+        \midrule
+        {\color{darkred}Malignant} & 9,493 & 31.0\% & \\
+        {\color{darkgreen}Benign}  & 21,154 & 69.0\% & \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.4em}
+      {\scriptsize\color{gray}
+      Weights $= N_{\text{total}}/(N_{\text{classes}} \times N_c)$ applied to CrossEntropyLoss.\\
+      75:1 nv:df imbalance makes weighting essential.}
+    \end{column}
+
+    %% ── Right: source breakdown + train/test split ──────────────────────────
+    \begin{column}{0.42\textwidth}
+      \textbf{\color{navyblue}Source Breakdown}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} l r r @{}}
+        \toprule
+        Dataset & Images & Labeled \\
+        \midrule
+        HAM10000  &  9,873 &  9,873 \\
+        ISIC 2019 & 14,774 & 14,774 \\
+        ISIC 2020 & 33,126 &  6,000 \\
+        \midrule
+        \textbf{Total} & \textbf{57,773} & \textbf{30,647} \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.5em}
+      \textbf{\color{navyblue}Train / Test Split}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} l r r r @{}}
+        \toprule
+        Split & Rows & Mal. & Ben. \\
+        \midrule
+        Train 75\% & 22,985 & 7,102 & 15,883 \\
+        Test  25\% &  7,662 & 2,373 &  5,289 \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.4em}
+      {\scriptsize\color{gray}
+      Stratified once, locked.\\ All downstream models respect this boundary.}
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 6 — MLP Architecture & Per-Class Accuracy
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 6 --- MLP Classifier: Architecture \& Results}
+
+  \begin{columns}[T]
+
+    %% ── Left: architecture ──────────────────────────────────────────────────
+    \begin{column}{0.46\textwidth}
+      \textbf{\color{navyblue}Architecture}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} l @{}}
+        Linear(1408 $\to$ 512) $\to$ ReLU $\to$ Dropout(0.3) \\
+        Linear(512 $\to$ 256) $\to$ ReLU $\to$ Dropout(0.3) \\
+        Linear(256 $\to$ 6) $\to$ Softmax \\
+        854,278 trainable parameters \\
+      \end{tabular}
+      }
+
+      \vspace{0.5em}
+      \begin{block}{OOF Training Discipline}
+        \small
+        \begin{itemize}[leftmargin=1em, itemsep=0pt]
+          \item 5-fold stratified CV on train set
+          \item Each fold's predictions come from model that \textbf{never saw} those rows
+          \item OOF output feeds XGBoost (no leakage)
+          \item Early stopping: patience=10, ReduceLROnPlateau
+        \end{itemize}
+      \end{block}
+
+      \vspace{0.4em}
+      {\small OOF accuracy: 75.6\% \quad Test accuracy: \textbf{81.1\%}}
+    \end{column}
+
+    %% ── Right: per-class accuracy ───────────────────────────────────────────
+    \begin{column}{0.50\textwidth}
+      \textbf{\color{navyblue}Per-Class Accuracy on Test Set}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} l r r r @{}}
+        \toprule
+        Class & Correct & Total & Acc. \\
+        \midrule
+        {\color{darkred}mel}   &   989 & 1,276 & 0.775 \\
+        {\color{teal}nv}       & 3,838 & 4,517 & 0.850 \\
+        {\color{darkred}bcc}   &   656 &   831 & 0.789 \\
+        {\color{darkred}akiec} &   201 &   266 & 0.756 \\
+        {\color{teal}bkl}      &   488 &   712 & 0.685 \textbf{⚠} \\
+        {\color{teal}df}       &    43 &    60 & 0.717 \\
+        \midrule
+        Overall & \multicolumn{2}{r}{7,662} & \textbf{0.811} \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.4em}
+      {\scriptsize\color{gray}
+      bkl (benign keratosis) is hardest --- visually similar to mel and akiec.\\
+      MLP output is used as \textit{features} by XGBoost, not as final diagnosis.}
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 7 — Why MLP? Design Strategy
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 7 --- Why MLP? Design Strategy}
+
+  \begin{columns}[T]
+
+    %% ── Left: the problem with alternatives ─────────────────────────────────
+    \begin{column}{0.46\textwidth}
+      \begin{alertblock}{Why not feed embeddings directly to XGBoost?}
+        \small
+        \begin{itemize}[leftmargin=1em, itemsep=0pt]
+          \item \textbf{1408-D} is too high-dimensional for tree methods ---
+                shallow splits waste most features; severe overfitting risk
+          \item No \textbf{clinical interpretability} --- a raw float vector
+                has no meaning to a physician
+          \item XGBoost cannot leverage \textbf{shared visual structure}
+                across classes the way a neural net can
+        \end{itemize}
+      \end{alertblock}
+
+      \vspace{0.4em}
+      \begin{block}{The two-stage design}
+        \small
+        \textbf{Stage 1 (MLP):} learn which visual patterns correspond
+        to which diagnoses.\\[0.3em]
+        \textbf{Stage 2 (XGBoost):} combine the resulting 6-class
+        probabilities with clinical metadata and cohort scores
+        to make the final malignancy decision.
+      \end{block}
+    \end{column}
+
+    %% ── Right: why MLP specifically ─────────────────────────────────────────
+    \begin{column}{0.50\textwidth}
+      \textbf{\color{navyblue}Why MLP works here}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} p{2.6cm} p{4.0cm} @{}}
+        \toprule
+        Property & Benefit \\
+        \midrule
+        Non-linear compression
+          & Maps 1408-D $\to$ 6-D capturing complex visual patterns \\
+        \addlinespace
+        Domain adaptation
+          & Adapts general ViT embedding to dermatology class labels \\
+        \addlinespace
+        Clinically meaningful output
+          & 6 probabilities physicians can reason about \\
+        \addlinespace
+        OOF discipline
+          & 5-fold out-of-fold training; zero leakage to XGBoost \\
+        \addlinespace
+        Modular
+          & Swap backbone for domain-specific model (e.g.\ SkinGPT) later \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.4em}
+      {\scriptsize\color{gray}
+      OOF = XGBoost only ever trains on MLP predictions for rows\\
+      the MLP \textbf{never saw} --- prevents optimistic bias.}
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 8 — XGBoost: Features, CV Results & Feature Importance
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 8 --- XGBoost Classifier: Features \& Validation}
+
+  \begin{columns}[T]
+
+    %% ── Left: features + config ─────────────────────────────────────────────
+    \begin{column}{0.36\textwidth}
+      \textbf{\color{navyblue}13-Feature Matrix}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} ll @{}}
+        \toprule
+        Group & Features \\
+        \midrule
+        MLP (6)     & p\_mel, p\_nv, p\_bcc, \\
+                    & p\_akiec, p\_bkl, p\_df \\
+        Clinical (3)& age, sex, site \\
+        Cohort (4)  & knn mean/min/std, \\
+                    & lof\_score \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.5em}
+      \textbf{\color{navyblue}Top Feature Importance}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} l r @{}}
+        \toprule
+        Feature & Imp. \\
+        \midrule
+        p\_nv (nevus prob)  & 0.418 \\
+        knn\_min\_dist      & 0.127 \\
+        p\_bkl              & 0.071 \\
+        age\_normalized     & 0.068 \\
+        p\_mel              & 0.051 \\
+        \bottomrule
+      \end{tabular}
+      }
+    \end{column}
+
+    %% ── Right: CV table ─────────────────────────────────────────────────────
+    \begin{column}{0.60\textwidth}
+      \textbf{\color{navyblue}4-Fold Cross-Validation Results}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} lcccc @{}}
+        \toprule
+        & Fold 1 & Fold 2 & Fold 3 & Fold 4 \\
+        \midrule
+        Threshold  & 0.19 & 0.22 & 0.22 & 0.20 \\
+        Train AUC  & 0.971 & 0.970 & 0.967 & 0.971 \\
+        Test AUC   & 0.931 & 0.935 & 0.937 & 0.932 \\
+        Train recall & 0.993 & 0.991 & 0.988 & 0.992 \\
+        Test recall  & 0.951 & 0.952 & 0.952 & 0.951 \\
+        Specificity  & 0.680 & 0.719 & 0.704 & 0.694 \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.4em}
+      {\small
+      \begin{tabular}{@{} lcc @{}}
+        \toprule
+        Metric & Train mean $\pm$ std & Test mean $\pm$ std \\
+        \midrule
+        AUC         & $0.9697 \pm 0.0015$ & $0.9336 \pm 0.0023$ \\
+        Recall      & $0.9911 \pm 0.0018$ & $0.9513 \pm 0.0008$ \\
+        Specificity & $0.7222 \pm 0.0087$ & $0.6990 \pm 0.0144$ \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.3em}
+      {\scriptsize\color{gray}
+      Each fold tunes its own threshold independently.
+      Low variance in recall ($\pm$0.0008) confirms stability.}
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 9 — XGBoost: Why Gradient Boosting?
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 9 --- XGBoost: Why Gradient Boosting?}
+
+  \begin{columns}[T]
+
+    %% ── Left: intuition + fit ────────────────────────────────────────────────
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{navyblue}Intuition}
+
+      \vspace{0.3em}
+      \small
+      XGBoost builds an \textbf{ensemble of decision trees}, each correcting
+      the residual errors of the previous.
+      Each tree learns which \textbf{combination of features} best separates
+      the remaining misclassified cases.
+
+      \vspace{0.5em}
+      {\small
+      \begin{tabular}{@{} p{2.4cm} p{3.6cm} @{}}
+        \toprule
+        Requirement & How XGBoost handles it \\
+        \midrule
+        Mixed features
+          & Probabilities, categorical \& continuous in one model \\
+        \addlinespace
+        Class imbalance
+          & \texttt{scale\_pos\_weight=2.24} adjusts gradient \\
+        \addlinespace
+        Feature interactions
+          & Trees find: (p\_nv high) AND (age $>$ 50) $\Rightarrow$ benign \\
+        \addlinespace
+        Clinical trust
+          & Feature importance \& SHAP values are explainable \\
+        \addlinespace
+        Speed
+          & Sub-millisecond inference per patient \\
+        \bottomrule
+      \end{tabular}
+      }
+    \end{column}
+
+    %% ── Right: alternatives considered ──────────────────────────────────────
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{navyblue}Approaches Considered}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} p{3.0cm} p{3.2cm} @{}}
+        \toprule
+        Approach & Why not chosen \\
+        \midrule
+        Raw embedding $\to$ XGBoost
+          & 1408-D overwhelms trees; no interpretability \\
+        \addlinespace
+        MLP end-to-end binary
+          & Cannot interactively adjust clinical context \\
+        \addlinespace
+        MLP $\to$ logistic regression
+          & Linear; misses (p\_nv high) AND (knn high) interactions \\
+        \addlinespace
+        \textbf{MLP + clinical + cohort $\to$ XGBoost}
+          & \textbf{Chosen: 13 features, fast, interpretable} \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.4em}
+      \begin{exampleblock}{Final XGBoost config}
+        \small
+        \texttt{objective: binary:logistic}\\
+        \texttt{scale\_pos\_weight: 2.24}\\
+        500 trees, max\_depth=6, lr=0.05\\
+        Early stopping: 30 rounds on AUC\\
+        Avg best iteration: 181 trees
+      \end{exampleblock}
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 10 — Final Results: Threshold Tuning Comparison
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 10 --- Results: Why $\tau = 0.20$?}
+
+  \begin{columns}[T]
+
+    %% ── Left: rationale ─────────────────────────────────────────────────────
+    \begin{column}{0.44\textwidth}
+      \textbf{\color{navyblue}Threshold Tuning Rationale}
+
+      \vspace{0.4em}
+      \small
+      Default threshold $\tau = 0.50$ treats classification as symmetric.
+      But the clinical cost of a \textbf{missed cancer} far exceeds the cost
+      of a false alarm that a physician reviews and clears.
+
+      \vspace{0.5em}
+      \begin{block}{Target}
+        \small Malignant recall $\geq 0.95$\\
+        (catch 95\%+ of cancers)
+      \end{block}
+
+      \vspace{0.4em}
+      \begin{alertblock}{Default $\tau = 0.50$ fails}
+        \small Recall = 0.871 --- misses 13\% of cancers \\
+        Unacceptable for a screening tool
+      \end{alertblock}
+
+      \vspace{0.4em}
+      \begin{exampleblock}{Tuned $\tau = 0.20$ achieves target}
+        \small Recall = 0.954 \checkmark \\
+        NPV = 0.973 --- cleared cases truly benign
+      \end{exampleblock}
+    \end{column}
+
+    %% ── Right: comparison table ─────────────────────────────────────────────
+    \begin{column}{0.52\textwidth}
+      \textbf{\color{navyblue}Locked Test Set (7,662 rows)}
+
+      \vspace{0.4em}
+      {\small
+      \begin{tabular}{@{} lcc @{}}
+        \toprule
+        Metric & $\tau = 0.20$ & $\tau = 0.50$ \\
+        \midrule
+        ROC-AUC     & \textbf{0.9512} & 0.9512 \\
+        Recall      & \textbf{0.9541} \checkmark & 0.8710 $\times$ \\
+        Precision   & 0.6320 & 0.7920 \\
+        F1 Score    & 0.7604 & 0.8296 \\
+        Specificity & 0.7508 & 0.8973 \\
+        NPV         & \textbf{0.9733} & 0.9394 \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.5em}
+      {\small
+      \textbf{\color{navyblue}OOF Training AUC:} 0.9335\\
+      \textbf{\color{navyblue}Tuned threshold:} $\tau = 0.20$\\
+      \textbf{\color{navyblue}MLP test accuracy:} 81.1\%
+      }
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 11 — Physician UI Mockup
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 11 --- Physician UI: What the Doctor Sees}
+  \vspace{-0.3em}
+  \begin{center}
+  \begin{tikzpicture}[scale=0.70, font=\tiny]
+
+    %% ── Dashboard outer frame ─────────────────────────────────────────────
+    \draw[rounded corners=5pt, fill=gray!6, draw=navyblue!60, line width=1pt]
+      (0,0) rectangle (17, 9.5);
+
+    %% Title bar
+    \fill[navyblue] (0, 8.8) rectangle (17, 9.5);
+    \node[white, font=\scriptsize\bfseries] at (8.5, 9.15)
+      {DermAtlas Clinical Dashboard \hspace{0.8cm} Patient \#12483
+       \hspace{0.8cm} Dr.\ Smith};
+
+    %% ═══ Panel 1: Patient Input ═══════════════════════════════════════════
+    \draw[fill=white, rounded corners=3pt, draw=gray!30]
+      (0.2, 0.2) rectangle (5.0, 8.6);
+    \node[navyblue, font=\scriptsize\bfseries] at (2.6, 8.3) {Patient Input};
+
+    %% Image placeholder
+    \fill[gray!20] (0.4, 6.2) rectangle (4.8, 8.0);
+    \draw[gray!40] (0.4, 6.2) rectangle (4.8, 8.0);
+    \node[gray!60] at (2.6, 7.1) {dermoscopy image};
+
+    %% Clinical fields
+    \node[anchor=west] at (0.5, 5.8) {\textbf{Age:} 58};
+    \node[anchor=west] at (0.5, 5.4) {\textbf{Sex:} Male};
+    \node[anchor=west] at (0.5, 5.0) {\textbf{Site:} Back};
+    \node[anchor=west] at (0.5, 4.6) {\textbf{Dx type:} Follow-up};
+
+    \fill[teal!60] (0.6, 3.7) rectangle (4.4, 4.2);
+    \node[white, font=\tiny\bfseries] at (2.5, 3.95) {Update Clinical Context};
+
+    \node[gray!60, align=center] at (2.6, 3.0)
+      {Bayesian layer applies\\precomputed priors\\(no model rerun)};
+
+    %% ═══ Panel 2: Malignancy Assessment ═══════════════════════════════════
+    \draw[fill=white, rounded corners=3pt, draw=gray!30]
+      (5.3, 0.2) rectangle (11.0, 8.6);
+    \node[navyblue, font=\scriptsize\bfseries] at (8.15, 8.3)
+      {Malignancy Assessment};
+
+    %% Score circle
+    \fill[darkred!10] (8.15, 6.4) circle (1.35);
+    \draw[darkred, line width=1.5pt] (8.15, 6.4) circle (1.35);
+    \node[darkred, font=\large\bfseries] at (8.15, 6.55) {0.73};
+    \node[darkred, font=\tiny\bfseries] at (8.15, 6.0) {P(malignant)};
+
+    %% Decision flag
+    \fill[darkred] (6.1, 5.1) rectangle (10.2, 5.55);
+    \node[white, font=\tiny\bfseries] at (8.15, 5.32) {FLAG FOR BIOPSY};
+
+    %% Class distribution bars
+    \node[navyblue, font=\tiny\bfseries, anchor=west] at (5.5, 4.75)
+      {Class Distribution};
+
+    % bars: left edge at 6.5, max bar width = 3.5 (for prob 1.0)
+    \fill[darkred!70]  (6.5,4.2)  rectangle (8.075,4.45); % mel 0.45
+    \node[anchor=east] at (6.45,4.32) {mel};
+    \node[anchor=west] at (8.12,4.32) {0.45};
+
+    \fill[darkred!50]  (6.5,3.8)  rectangle (7.48,4.05);  % bcc 0.28
+    \node[anchor=east] at (6.45,3.92) {bcc};
+    \node[anchor=west] at (7.53,3.92) {0.28};
+
+    \fill[teal!50]     (6.5,3.4)  rectangle (6.92,3.65);  % nv 0.12
+    \node[anchor=east] at (6.45,3.52) {nv};
+    \node[anchor=west] at (6.97,3.52) {0.12};
+
+    \fill[teal!40]     (6.5,3.0)  rectangle (6.815,3.25); % bkl 0.09
+    \node[anchor=east] at (6.45,3.12) {bkl};
+    \node[anchor=west] at (6.87,3.12) {0.09};
+
+    \fill[darkred!30]  (6.5,2.6)  rectangle (6.675,2.85); % akiec 0.05
+    \node[anchor=east] at (6.45,2.72) {akiec};
+    \node[anchor=west] at (6.72,2.72) {0.05};
+
+    \fill[teal!20]     (6.5,2.2)  rectangle (6.535,2.45); % df 0.01
+    \node[anchor=east] at (6.45,2.32) {df};
+    \node[anchor=west] at (6.58,2.32) {0.01};
+
+    %% Believability bar
+    \node[font=\tiny\bfseries, anchor=west] at (5.5, 1.7)
+      {Believability Score: \textbf{0.78}};
+    \fill[gray!20]   (5.5, 1.1) rectangle (10.8, 1.45);
+    \fill[orange!65] (5.5, 1.1) rectangle (9.69, 1.45); % 0.78 of width
+
+    %% ═══ Panel 3: Similar Cases ════════════════════════════════════════════
+    \draw[fill=white, rounded corners=3pt, draw=gray!30]
+      (11.3, 0.2) rectangle (16.8, 8.6);
+    \node[navyblue, font=\scriptsize\bfseries] at (14.05, 8.3)
+      {Similar Historical Cases};
+
+    % Case 1
+    \fill[gray!20] (11.5, 6.7) rectangle (14.3, 8.0);
+    \draw[gray!30] (11.5, 6.7) rectangle (14.3, 8.0);
+    \node[gray!50] at (12.9, 7.35) {[image]};
+    \node[darkred, font=\tiny\bfseries, anchor=west] at (14.4, 7.75) {mel};
+    \node[gray,    anchor=west] at (14.4, 7.45) {sim: 0.94};
+    \node[gray,    anchor=west] at (14.4, 7.15) {HAM10000};
+
+    % Case 2
+    \fill[gray!20] (11.5, 5.1) rectangle (14.3, 6.4);
+    \draw[gray!30] (11.5, 5.1) rectangle (14.3, 6.4);
+    \node[gray!50] at (12.9, 5.75) {[image]};
+    \node[darkred, font=\tiny\bfseries, anchor=west] at (14.4, 6.15) {mel};
+    \node[gray,    anchor=west] at (14.4, 5.85) {sim: 0.91};
+    \node[gray,    anchor=west] at (14.4, 5.55) {ISIC 2019};
+
+    % Case 3
+    \fill[gray!20] (11.5, 3.5) rectangle (14.3, 4.8);
+    \draw[gray!30] (11.5, 3.5) rectangle (14.3, 4.8);
+    \node[gray!50] at (12.9, 4.15) {[image]};
+    \node[darkred, font=\tiny\bfseries, anchor=west] at (14.4, 4.55) {bcc};
+    \node[gray,    anchor=west] at (14.4, 4.25) {sim: 0.88};
+    \node[gray,    anchor=west] at (14.4, 3.95) {HAM10000};
+
+    \node[gray!60, align=center] at (14.05, 2.6)
+      {Vertex Vector Search\\top-$k$ by embedding distance};
+
+  \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 12 — Limitations & Future Work
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 12 --- Limitations \& Future Work}
+
+  \begin{columns}[T]
+
+    %% ── Left: known limitations ─────────────────────────────────────────────
+    \begin{column}{0.52\textwidth}
+      \begin{alertblock}{Known Limitations}
+        \small
+        \begin{itemize}[leftmargin=1em, itemsep=0pt]
+          \item \textbf{Class scarcity} --- df: 239 samples, akiec: 1,064.
+                Even with inverse-frequency weights, rare class accuracy is limited.
+          \item \textbf{Skin tone bias} --- all three datasets are predominantly
+                light-skinned European/Australian patients.
+                The cohort deviation reference pool inherits this bias.
+          \item \textbf{General-purpose embedding} ---
+                \texttt{multimodalembedding@001} trained on internet images,
+                not dermoscopy. May miss blue--white veils, pigment networks,
+                regression areas.
+          \item \textbf{ISIC 2020 overlap} --- image sources shared with ISIC 2019;
+                potential near-duplicates across datasets.
+          \item \textbf{Dropped classes} --- vasc (vascular lesions) and scc
+                (squamous cell carcinoma) excluded due to insufficient samples.
+        \end{itemize}
+      \end{alertblock}
+    \end{column}
+
+    %% ── Right: future work ──────────────────────────────────────────────────
+    \begin{column}{0.44\textwidth}
+      \begin{block}{Future Work}
+        \small
+        \begin{itemize}[leftmargin=1em, itemsep=0pt]
+          \item \textbf{Domain-specific embeddings} --- evaluate SkinGPT or
+                DermFoundation backbone; expected to improve rare-class recall.
+          \item \textbf{Skin tone auditing} --- collect or synthesize Fitzpatrick
+                III--VI examples; measure per-stratum recall.
+          \item \textbf{Vector Search deployment} --- build Vertex AI index for
+                top-$k$ similar case retrieval in the physician UI.
+          \item \textbf{Bayesian update layer} --- precompute
+                $P(\text{class}\mid\text{age, sex, site})$ table for interactive
+                clinical context adjustment.
+          \item \textbf{Believability score} --- classifier confidence
+                $\times$ neighbor label agreement for physician trust calibration.
+        \end{itemize}
+      \end{block}
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+\end{document}
