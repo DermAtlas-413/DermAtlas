@@ -36,7 +36,12 @@ async def login(
     if user is None or not verify_password(str(password), user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
-    token = create_access_token({"sub": str(user.user_id), "role": user.role.value})
+    token = create_access_token({
+        "sub": str(user.user_id),
+        "role": user.role.value,
+        "full_name": user.full_name,
+        "email": user.email,
+    })
 
     db.add(
         AuditLog(

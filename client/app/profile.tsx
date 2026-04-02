@@ -105,25 +105,27 @@ export default function Profile() {
             </View>
           </View>
 
-          {/* Admin section */}
-          <View style={styles.menuGroup}>
-            <SectionHeader title="Administrator Controls" />
-            <View style={styles.menuCard}>
-              <MenuRow
-                icon="account-group-outline"
-                label="Manage Users"
-                sublabel="Add, remove, or edit user accounts"
-                onPress={handleManageUsers}
-              />
-              <View style={styles.menuDivider} />
-              <MenuRow
-                icon="clipboard-list-outline"
-                label="View Audit Logs"
-                sublabel="Review system activity and access history"
-                onPress={handleAuditLogs}
-              />
+          {/* Admin section — PCP only */}
+          {user?.role === "PCP" && (
+            <View style={styles.menuGroup}>
+              <SectionHeader title="Administrator Controls" />
+              <View style={styles.menuCard}>
+                <MenuRow
+                  icon="account-group-outline"
+                  label="Manage Users"
+                  sublabel="Add, remove, or edit user accounts"
+                  onPress={handleManageUsers}
+                />
+                <View style={styles.menuDivider} />
+                <MenuRow
+                  icon="clipboard-list-outline"
+                  label="View Audit Logs"
+                  sublabel="Review system activity and access history"
+                  onPress={handleAuditLogs}
+                />
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Sign out */}
           <View style={styles.menuGroup}>

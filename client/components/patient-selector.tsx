@@ -40,9 +40,13 @@ export function PatientSelector({ selectedPatient, onSelect }: Props) {
   }, [open]);
 
   const filtered = query.trim()
-    ? patients.filter((p) =>
-        p.mrn_internal.toLowerCase().includes(query.trim().toLowerCase())
-      )
+    ? patients.filter((p) => {
+        const q = query.trim().toLowerCase();
+        return (
+          p.mrn_internal.toLowerCase().includes(q) ||
+          p.full_name.toLowerCase().includes(q)
+        );
+      })
     : patients;
 
   function handleSelect(patient: PatientResponse) {
@@ -64,7 +68,7 @@ export function PatientSelector({ selectedPatient, onSelect }: Props) {
         />
         <Text style={[styles.triggerText, !selectedPatient && styles.placeholder]}>
           {selectedPatient
-            ? `${selectedPatient.mrn_internal} · ID ${selectedPatient.patient_id}`
+            ? `${selectedPatient.full_name} · ${selectedPatient.mrn_internal}`
             : "Select Patient"}
         </Text>
         <MaterialCommunityIcons name="chevron-down" size={18} color={D.muted} />
@@ -88,7 +92,7 @@ export function PatientSelector({ selectedPatient, onSelect }: Props) {
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Search by MRN"
+              placeholder="Search by name or MRN"
               placeholderTextColor={D.muted}
               style={styles.searchInput}
               autoFocus
@@ -128,9 +132,9 @@ export function PatientSelector({ selectedPatient, onSelect }: Props) {
                   onPress={() => handleSelect(item)}
                 >
                   <View style={styles.rowMain}>
-                    <Text style={styles.rowMrn}>{item.mrn_internal}</Text>
+                    <Text style={styles.rowMrn}>{item.full_name}</Text>
                     <Text style={styles.rowSub}>
-                      ID {item.patient_id} · DOB {item.date_of_birth} ·{" "}
+                      {item.mrn_internal} · DOB {item.date_of_birth} ·{" "}
                       {item.gender}
                     </Text>
                   </View>
