@@ -6,6 +6,7 @@ interface AuthState {
   token: string | null;
   user: UserInfo | null;
   lastActivity: number | null;
+  _hasHydrated: boolean;
   setAuth: (token: string, user: UserInfo) => void;
   clearAuth: () => void;
   updateActivity: () => void;
@@ -23,6 +24,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       lastActivity: null,
+      _hasHydrated: false,
       setAuth: (token, user) => set({ token, user, lastActivity: Date.now() }),
       clearAuth: () => set({ token: null, user: null, lastActivity: null }),
       updateActivity: () => set({ lastActivity: Date.now() }),
@@ -30,6 +32,14 @@ export const useAuthStore = create<AuthState>()(
     {
       name: "dermatlas-auth",
       storage: createJSONStorage(() => safeSessionStorage),
+      partialize: (state) => ({
+        token: state.token,
+        user: state.user,
+        lastActivity: state.lastActivity,
+      }),
+      onRehydrateStorage: () => () => {
+        useAuthStore.setState({ _hasHydrated: true });
+      },
     }
   )
 );
