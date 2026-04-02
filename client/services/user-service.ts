@@ -111,12 +111,3 @@ export async function deactivateUser(userId: string): Promise<void> {
   }
   await apiFetch<void>(`/users/${userId}`, { method: "DELETE" });
 }
-
-export async function deleteUser(userId: string): Promise<void> {
-  if (USE_MOCK) {
-    await delay(400);
-    mockUsersStore = mockUsersStore.filter((u) => u.user_id !== userId);
-    return;
-  }
-  await apiFetch<void>(`/users/${userId}`, { method: "DELETE" });
-}
