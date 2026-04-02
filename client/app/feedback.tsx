@@ -13,6 +13,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { submitFeedback } from "@/services/feedback-service";
 import { useAuthStore } from "@/state/auth-store";
+import { useCurrentCaseStore } from "@/state/current-case-store";
 import { useRequireRole } from "@/hooks/use-require-role";
 import { ComparisonModal } from "@/components/comparison-modal";
 import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
@@ -24,23 +25,15 @@ export default function Feedback() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
-  const {
-    matchId,
-    queryId,
-    referenceId,
-    diagnosis,
-    similarity,
-    imageUri,
-    referenceImageUri,
-  } = useLocalSearchParams<{
+  const { matchId, referenceId } = useLocalSearchParams<{
     matchId?: string;
-    queryId?: string;
     referenceId?: string;
-    diagnosis?: string;
-    similarity?: string;
-    imageUri?: string;
-    referenceImageUri?: string;
   }>();
+  const queryId = useCurrentCaseStore((s) => s.queryId);
+  const imageUri = useCurrentCaseStore((s) => s.imageUri);
+  const diagnosis = useCurrentCaseStore((s) => s.diagnosis);
+  const similarity = useCurrentCaseStore((s) => s.similarity);
+  const referenceImageUri = useCurrentCaseStore((s) => s.referenceImageUri);
 
   const [vote, setVote] = useState<"up" | "down" | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -48,12 +41,10 @@ export default function Feedback() {
 
   if (!authorized) return null;
 
-  const uploadedSource = imageUri
-    ? { uri: decodeURIComponent(imageUri) }
-    : DEMO_UPLOAD_IMAGE;
+  const uploadedSource = imageUri ? { uri: imageUri } : DEMO_UPLOAD_IMAGE;
 
   const referenceSource = referenceImageUri
-    ? { uri: decodeURIComponent(referenceImageUri) }
+    ? { uri: referenceImageUri }
     : (referenceId ? DEMO_IMAGES[referenceId] : undefined);
 
   async function handleVote(direction: "up" | "down") {

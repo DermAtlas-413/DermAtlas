@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useAuthStore } from "@/state/auth-store";
+import { useCurrentCaseStore } from "@/state/current-case-store";
 import { useRequireRole } from "@/hooks/use-require-role";
 import { uploadImage } from "@/services/upload-service";
 import { useImageCapture } from "@/hooks/use-image-capture";
@@ -26,6 +27,7 @@ export default function Upload() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
+  const setCase = useCurrentCaseStore((s) => s.setCase);
   const [selectedPatient, setSelectedPatient] = useState<PatientResponse | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -53,9 +55,14 @@ export default function Upload() {
       const response = await fetch(imageUri);
       const blob = await response.blob();
       const res = await uploadImage(blob, selectedPatient.patient_id, "unspecified");
-      router.push(
-        `/compare?queryId=${encodeURIComponent(res.query_id)}&imageUri=${encodeURIComponent(imageUri)}&patientId=${encodeURIComponent(selectedPatient.patient_id)}&patientMrn=${encodeURIComponent(selectedPatient.mrn_internal)}&patientName=${encodeURIComponent(selectedPatient.full_name ?? "")}`
-      );
+      setCase({
+        patientId: selectedPatient.patient_id,
+        patientMrn: selectedPatient.mrn_internal,
+        patientName: selectedPatient.full_name ?? "",
+        queryId: res.query_id,
+        imageUri,
+      });
+      router.push(`/compare?queryId=${encodeURIComponent(res.query_id)}`);
     } catch (err) {
       Alert.alert("Upload failed", err instanceof Error ? err.message : "Please try again.");
     } finally {

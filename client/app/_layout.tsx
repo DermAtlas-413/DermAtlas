@@ -4,9 +4,13 @@ import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useProtectedRoute } from "@/hooks/use-protected-route";
+import { useSessionTimeout } from "@/hooks/use-session-timeout";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  useProtectedRoute();
+  useSessionTimeout();
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

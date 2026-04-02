@@ -12,6 +12,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useAuthStore } from "@/state/auth-store";
+import { useCurrentCaseStore } from "@/state/current-case-store";
 import { useRequireRole } from "@/hooks/use-require-role";
 import { analyzeLesion } from "@/services/lesion-service";
 import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
@@ -24,21 +25,17 @@ export default function Compare() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
-  const { queryId, imageUri, patientId, patientMrn, patientName } = useLocalSearchParams<{
-    queryId?: string;
-    imageUri?: string;
-    patientId?: string;
-    patientMrn?: string;
-    patientName?: string;
-  }>();
+  const { queryId } = useLocalSearchParams<{ queryId?: string }>();
+  const patientName = useCurrentCaseStore((s) => s.patientName);
+  const patientMrn = useCurrentCaseStore((s) => s.patientMrn);
+  const patientId = useCurrentCaseStore((s) => s.patientId);
+  const imageUri = useCurrentCaseStore((s) => s.imageUri);
+  const setFeedbackTarget = useCurrentCaseStore((s) => s.setFeedbackTarget);
   const [matches, setMatches] = useState<AnalyzeMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const decodedImageUri = imageUri ? decodeURIComponent(imageUri) : null;
-  const decodedPatientName = patientName ? decodeURIComponent(patientName) : "";
-  const decodedPatientMrn = patientMrn ? decodeURIComponent(patientMrn) : "";
-  const patientLabel = decodedPatientName || decodedPatientMrn || (patientId ? `ID # ${patientId}` : "—");
+  const patientLabel = patientName || patientMrn || (patientId ? `ID # ${patientId}` : "—");
 
   useEffect(() => {
     if (!authorized) return;
@@ -100,8 +97,8 @@ export default function Compare() {
             />
             <View style={{ flex: 1 }}>
               <Text style={styles.patientText}>Patient: {patientLabel}</Text>
-              {decodedPatientMrn && decodedPatientName ? (
-                <Text style={styles.patientMeta}>{decodedPatientMrn} · ID #{patientId}</Text>
+              {patientMrn && patientName ? (
+                <Text style={styles.patientMeta}>{patientMrn} · ID #{patientId}</Text>
               ) : patientId ? (
                 <Text style={styles.patientMeta}>ID #{patientId}</Text>
               ) : null}
@@ -113,7 +110,7 @@ export default function Compare() {
             <Text style={styles.sectionLabel}>Submitted Image</Text>
             <View style={styles.imageCard}>
               <Image
-                source={decodedImageUri ? { uri: decodedImageUri } : DEMO_UPLOAD_IMAGE}
+                source={imageUri ? { uri: imageUri } : DEMO_UPLOAD_IMAGE}
                 style={styles.submittedImage}
                 contentFit="cover"
               />
@@ -144,13 +141,16 @@ export default function Compare() {
                 <MatchCard
                   key={m.reference_id}
                   m={m}
-                  queryId={queryId}
-                  decodedImageUri={decodedImageUri}
                   onPress={() => {
                     const similarity = Math.round(m.score * 100);
-                    router.push(
-                      `/feedback?matchId=${m.reference_id}&queryId=${queryId ?? ""}&referenceId=${m.reference_id}&diagnosis=${encodeURIComponent(m.diagnosis_label ?? "")}&similarity=${similarity}&imageUri=${encodeURIComponent(decodedImageUri ?? "")}&referenceImageUri=${encodeURIComponent(m.gcs_uri ?? "")}`
-                    );
+                    setFeedbackTarget({
+                      matchId: m.reference_id,
+                      referenceId: m.reference_id,
+                      diagnosis: m.diagnosis_label ?? "",
+                      similarity,
+                      referenceImageUri: m.gcs_uri ?? "",
+                    });
+                    router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
                   }}
                 />
               ))}
@@ -165,13 +165,9 @@ export default function Compare() {
 
 function MatchCard({
   m,
-  queryId: _queryId,
-  decodedImageUri: _decodedImageUri,
   onPress,
 }: {
   m: AnalyzeMatch;
-  queryId: string | undefined;
-  decodedImageUri: string | null;
   onPress: () => void;
 }) {
   const [imgError, setImgError] = useState(false);
