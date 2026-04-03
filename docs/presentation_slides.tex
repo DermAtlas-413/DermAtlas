@@ -226,36 +226,52 @@
   \vspace{0.3em}
   \begin{center}
   \begin{tikzpicture}[
-    node distance = 0.55cm and 0.45cm,
-    box/.style    = {draw, rounded corners=4pt, align=center,
-                     font=\small\bfseries, inner sep=6pt, minimum height=1cm},
-    arr/.style    = {-{Stealth[length=4pt]}, thick, color=navyblue},
-    parr/.style   = {-{Stealth[length=4pt]}, thick, dashed, color=purple},
+    box/.style  = {draw, rounded corners=4pt, align=center,
+                   font=\scriptsize\bfseries, inner sep=4pt, minimum height=0.8cm},
+    arr/.style  = {-{Stealth[length=4pt]}, thick, color=navyblue},
+    parr/.style = {-{Stealth[length=4pt]}, thick, dashed, color=medblue},
   ]
 
-    \node[box, fill=teal!15,    draw=teal]    (emb)    {1408-D\\Embedding};
-    \node[box, fill=purple!15,  draw=purple,  right=of emb]  (cohort) {Cohort\\Deviation};
-    \node[box, fill=orange!15,  draw=orange,  right=of cohort](mlp)   {MLP\\Classifier};
-    \node[box, fill=darkred!15, draw=darkred, right=of mlp]  (xgb)   {XGBoost};
-    \node[box, fill=darkgreen!15,draw=darkgreen,right=of xgb](dec)   {Malignant\\/ Benign};
+    %% ── Main nodes ──────────────────────────────────────────────────────────
+    \node[box, fill=teal!15,      draw=teal]       (emb)    at (0,    0)   {1408-D\\Embedding};
+    \node[box, fill=navyblue!12,  draw=navyblue]   (split)  at (2.8,  0)   {Stratified\\K-Fold Split};
+    \node[box, fill=orange!15,    draw=orange]     (mlp)    at (6.0,  1.2) {MLP\\Classifier};
+    \node[box, fill=purple!15,    draw=purple]     (cohort) at (6.0, -1.2) {Cohort\\Deviation};
+    \node[box, fill=darkred!15,   draw=darkred]    (xgb)    at (9.2,  0)   {XGBoost};
+    \node[box, fill=darkgreen!15, draw=darkgreen]  (dec)    at (12.2, 0)   {Malignant\\/ Benign};
 
-    \draw[arr] (emb)    -- (cohort);
-    \draw[arr] (cohort) -- (mlp);
-    \draw[arr] (mlp)    -- (xgb);
-    \draw[arr] (xgb)    -- (dec);
+    %% Embedding → split
+    \draw[arr] (emb) -- (split);
 
-    %% parallel KNN path
-    \node[box, fill=medblue!15, draw=medblue,
-          below=0.7cm of xgb] (knn) {KNN / Vector Search\\{\footnotesize top-k similar cases}};
+    %% Split forks to MLP and Cohort in parallel
+    \draw[arr] (split.north east) to[out=40,  in=180] (mlp.west);
+    \draw[arr] (split.south east) to[out=-40, in=180] (cohort.west);
 
-    \draw[parr] (emb.south) -- ++(0,-0.4) -| (knn.west);
-    \draw[parr] (knn.east)  -- ++(0.3,0)  |- (dec.south);
+    %% MLP and Cohort both converge into XGBoost
+    \draw[arr] (mlp.east)    to[out=0, in=150] (xgb.north west);
+    \draw[arr] (cohort.east) to[out=0, in=210] (xgb.south west);
 
-    %% labels above
-    \node[above=0.15cm of cohort, font=\scriptsize\color{purple}]  {ugly duckling};
-    \node[above=0.15cm of mlp,    font=\scriptsize\color{orange}]  {6-class softmax};
-    \node[above=0.15cm of xgb,    font=\scriptsize\color{darkred}] {P(malignant)};
-    \node[above=0.15cm of dec,    font=\scriptsize\color{darkgreen}]{$\tau = 0.20$};
+    %% XGBoost → decision
+    \draw[arr] (xgb) -- (dec);
+
+    %% Clinical metadata drops into XGBoost from above
+    \node[font=\tiny, align=center, text=gray]
+          (meta) at (9.2, 2.0) {age / sex / site\\(clinical metadata)};
+    \draw[arr, gray, thin] (meta.south) -- (xgb.north);
+
+    %% ── Vector Search: separate parallel path ───────────────────────────────
+    \node[box, fill=medblue!15, draw=medblue]
+          (knn) at (7.0, -3.2) {KNN / Vector Search\\{\footnotesize top-k similar cases}};
+
+    \draw[parr] (emb.south)  to[out=-90, in=180] (knn.west);
+    \draw[parr] (knn.east)   to[out=0,   in=-90] (dec.south);
+
+    %% ── Labels ──────────────────────────────────────────────────────────────
+    \node[above=0.08cm of split,  font=\tiny\color{navyblue}]  {75/25 stratified};
+    \node[above=0.08cm of mlp,    font=\tiny\color{orange}]    {6-class softmax};
+    \node[below=0.08cm of cohort, font=\tiny\color{purple}]    {ugly duckling (4 scores)};
+    \node[above=0.08cm of xgb,    font=\tiny\color{darkred}]   {P(malignant)};
+    \node[above=0.08cm of dec,    font=\tiny\color{darkgreen}] {$\tau = 0.20$};
 
   \end{tikzpicture}
   \end{center}
@@ -289,20 +305,20 @@
   \begin{columns}[T]
 
     %% ── Left: clinical concept ────────────────────────────────────────────
-    \begin{column}{0.32\textwidth}
+    \begin{column}{0.31\textwidth}
       \textbf{\color{navyblue}Clinical Concept}
 
-      \vspace{0.4em}
-      \small
+      \vspace{0.3em}
+      {\small
       Dermatologists use the \textbf{ugly duckling sign} --- a lesion that looks
       visually different from the patient's other benign lesions is suspicious.
 
-      \vspace{0.5em}
-      We formalize this computationally:
-      \textit{how far does this image's embedding sit from the benign lesions
-      in the same demographic group?}
+      \vspace{0.3em}
+      We formalize this: \textit{how far does this image's embedding sit from
+      the benign lesions in the same demographic group?}
+      }
 
-      \vspace{0.5em}
+      \vspace{0.4em}
       \begin{exampleblock}{Sanity Check}
         \small
         \begin{tabular}{@{}lr@{}}
@@ -314,64 +330,67 @@
     \end{column}
 
     %% ── Middle: how it works ──────────────────────────────────────────────
-    \begin{column}{0.36\textwidth}
+    \begin{column}{0.30\textwidth}
       \textbf{\color{navyblue}How It Works}
 
-      \vspace{0.4em}
-      \small
-      \textbf{1.} Group train-set benign images by cohort:\\
+      \vspace{0.3em}
+      {\small
+      \textbf{1.} Group train benign images by cohort:\\
       \quad age group $\times$ sex $\times$ body site
 
-      \vspace{0.3em}
+      \vspace{0.25em}
       \begin{tabular}{@{}ll@{}}
         Age  & young / middle / old \\
         Sex  & male / female \\
         Site & back, torso, leg \ldots \\
       \end{tabular}
 
-      \vspace{0.4em}
-      \textbf{2.} Fallback chain when group too small:\\
+      \vspace{0.3em}
+      \textbf{2.} Fallback when group too small:\\
       \quad full key $\to$ age+sex $\to$ age $\to$ global
 
-      \vspace{0.4em}
+      \vspace{0.3em}
       \textbf{3.} PCA $1408 \to 128$ dims, then\\
       \quad KNN index + LocalOutlierFactor
 
-      \vspace{0.4em}
+      \vspace{0.3em}
       \textbf{4.} Score every image against the\\
       \quad frozen train-set benign index
 
-      \vspace{0.4em}
+      \vspace{0.3em}
       \textbf{Output (4 features per image):}\\
-      \quad \texttt{knn\_mean\_dist}\\
-      \quad \texttt{knn\_min\_dist}\\
-      \quad \texttt{knn\_std\_dist}\\
-      \quad \texttt{lof\_score}
+      \quad \texttt{knn\_mean\_dist} \quad \texttt{knn\_min\_dist}\\
+      \quad \texttt{knn\_std\_dist} \quad \texttt{lof\_score}
+      }
     \end{column}
 
-    %% ── Right: key design decisions ───────────────────────────────────────
-    \begin{column}{0.28\textwidth}
+    %% ── Right: design decisions + leakage ────────────────────────────────
+    \begin{column}{0.38\textwidth}
       \textbf{\color{navyblue}Key Design Decisions}
 
-      \vspace{0.4em}
+      \vspace{0.2em}
       \begin{block}{Train-set only}
-        \small Reference pool built from train images only.
+        \scriptsize Reference pool built from train images only.
         Test images query a frozen index they never contributed to.
-        \textit{(Fixes data leakage across split boundary.)}
       \end{block}
 
-      \vspace{0.3em}
-      \begin{block}{Confirmed benign only}
-        \small ISIC 2020 ``unknown'' images excluded.
-        ``Unknown'' $\neq$ confirmed benign --- including them
-        would pollute the reference distribution.
-      \end{block}
+      \vspace{0.2em}
+      \begin{alertblock}{Data Leakage We Caught}
+        \scriptsize
+        An early run gave a suspiciously high AUC, prompting us to
+        audit the script. The bug: the KNN reference pool used
+        \textbf{all 57,773 images} --- test images contributed to
+        the index they were later scored against, making their
+        cohort distances artificially small.\\[0.2em]
+        \textbf{Fix:} train-set confirmed benign only.\\
+        AUC corrected: $0.957 \to 0.951$.
+      \end{alertblock}
 
-      \vspace{0.3em}
+      \vspace{0.2em}
       \begin{alertblock}{Limitation}
-        \small Reference pool is predominantly light-skinned patients.
-        May flag lesions on darker skin as unusual for demographic reasons,
-        not clinical ones.
+        \scriptsize Reference pool is predominantly light-skinned.
+        May flag darker-skin lesions as unusual for demographic
+        reasons, not clinical ones.
       \end{alertblock}
 
     \end{column}
@@ -464,40 +483,55 @@
 
   \begin{columns}[T]
 
-    %% ── Left: architecture ──────────────────────────────────────────────────
-    \begin{column}{0.46\textwidth}
-      \textbf{\color{navyblue}Architecture}
+    %% ── Left: definition + why not PCA + architecture ───────────────────────
+    \begin{column}{0.50\textwidth}
+      \textbf{\color{navyblue}What is an MLP?}
+
+      \vspace{0.2em}
+      {\small
+      A \textbf{Multi-Layer Perceptron} is a supervised feedforward neural
+      network. Each layer applies a learned linear transformation followed
+      by a non-linear activation:
+      \[
+        \mathbf{h} = \text{ReLU}(\mathbf{W}\mathbf{x} + \mathbf{b})
+      \]
+      Stacking layers lets it learn \textbf{complex, non-linear mappings}
+      from input to output.}
 
       \vspace{0.3em}
+      \textbf{\color{navyblue}Why not PCA?}
+
+      \vspace{0.2em}
       {\small
-      \begin{tabular}{@{} l @{}}
-        Linear(1408 $\to$ 512) $\to$ ReLU $\to$ Dropout(0.3) \\
-        Linear(512 $\to$ 256) $\to$ ReLU $\to$ Dropout(0.3) \\
-        Linear(256 $\to$ 6) $\to$ Softmax \\
-        854,278 trainable parameters \\
+      \begin{tabular}{@{} p{1.5cm} p{2.0cm} p{2.0cm} @{}}
+        \toprule
+        & PCA & MLP \\
+        \midrule
+        Supervision  & None (unsupervised) & Uses class labels \\
+        Mapping      & Linear only         & Non-linear \\
+        Objective    & Max variance        & Max discriminability \\
+        Output       & Components          & Class probabilities \\
+        \bottomrule
       \end{tabular}
       }
 
-      \vspace{0.5em}
-      \begin{block}{OOF Training Discipline}
-        \small
-        \begin{itemize}[leftmargin=1em, itemsep=0pt]
-          \item 5-fold stratified CV on train set
-          \item Each fold's predictions come from model that \textbf{never saw} those rows
-          \item OOF output feeds XGBoost (no leakage)
-          \item Early stopping: patience=10, ReduceLROnPlateau
-        \end{itemize}
-      \end{block}
+      \vspace{0.2em}
+      {\scriptsize\color{gray}
+      PCA finds directions of maximum variance --- not maximum diagnostic
+      relevance. MLP learns what makes melanoma \textit{look different}
+      from nevus, not just what varies most.}
 
-      \vspace{0.4em}
-      {\small OOF accuracy: 75.6\% \quad Test accuracy: \textbf{81.1\%}}
+      \vspace{0.3em}
+      {\small\textbf{Architecture:} 1408$\to$512$\to$256$\to$6 (softmax)
+      \quad 854k params\\
+      OOF accuracy: 75.6\% \quad Test accuracy: \textbf{81.1\%}}
     \end{column}
 
     %% ── Right: per-class accuracy ───────────────────────────────────────────
-    \begin{column}{0.50\textwidth}
+    \begin{column}{0.46\textwidth}
       \textbf{\color{navyblue}Per-Class Accuracy on Test Set}
 
-      \vspace{0.3em}
+      \vspace{0.2em}
       {\small
       \begin{tabular}{@{} l r r r @{}}
         \toprule
@@ -515,10 +549,10 @@
       \end{tabular}
       }
 
-      \vspace{0.4em}
+      \vspace{0.2em}
       {\scriptsize\color{gray}
-      bkl (benign keratosis) is hardest --- visually similar to mel and akiec.\\
-      MLP output is used as \textit{features} by XGBoost, not as final diagnosis.}
+      bkl is hardest --- visually similar to mel and akiec.\\
+      MLP output is \textit{features} for XGBoost, not the final diagnosis.}
     \end{column}
 
   \end{columns}
@@ -800,7 +834,7 @@
 
     %% ── Right: comparison table ─────────────────────────────────────────────
     \begin{column}{0.52\textwidth}
-      \textbf{\color{navyblue}Locked Test Set (7,662 rows)}
+      \textbf{\color{navyblue}Test Set Results (7,662 rows)}
 
       \vspace{0.4em}
       {\small
@@ -808,7 +842,7 @@
         \toprule
         Metric & $\tau = 0.20$ & $\tau = 0.50$ \\
         \midrule
-        ROC-AUC     & \textbf{0.9512} & 0.9512 \\
+        ROC-AUC     & \textbf{0.9335} & 0.9521 \\
         Recall      & \textbf{0.9541} \checkmark & 0.8710 $\times$ \\
         Precision   & 0.6320 & 0.7920 \\
         F1 Score    & 0.7604 & 0.8296 \\
@@ -820,7 +854,6 @@
 
       \vspace{0.5em}
       {\small
-      \textbf{\color{navyblue}OOF Training AUC:} 0.9335\\
       \textbf{\color{navyblue}Tuned threshold:} $\tau = 0.20$\\
       \textbf{\color{navyblue}MLP test accuracy:} 81.1\%
       }
