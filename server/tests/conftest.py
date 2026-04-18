@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
+from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
@@ -316,10 +317,24 @@ def mock_gcs(mocker):
 
 @pytest.fixture
 def mock_vertex(mocker):
-    """Patch the Vertex AI vector search query method."""
-    mock = mocker.patch(
-        "google.cloud.aiplatform.MatchingEngineIndexEndpoint"
+    """Patch the Vertex AI vector search endpoint AND the multimodal embedding model.
+
+    The analyze endpoint calls both:
+      - `vertexai.vision_models.MultiModalEmbeddingModel.from_pretrained(...).get_embeddings(...)`
+        to embed the uploaded image
+      - `google.cloud.aiplatform.MatchingEngineIndexEndpoint(...).find_neighbors(...)`
+        to query the vector index
+    Both must be mocked to keep tests offline and deterministic.
+    """
+    mocker.patch("vertexai.init")
+    embed_model_cls = mocker.patch(
+        "app.api.api_v1.endpoints.lesion.MultiModalEmbeddingModel"
     )
+    embedding_result = MagicMock()
+    embedding_result.image_embedding = [0.0] * 1408
+    embed_model_cls.from_pretrained.return_value.get_embeddings.return_value = embedding_result
+
+    mock = mocker.patch("google.cloud.aiplatform.MatchingEngineIndexEndpoint")
     endpoint = mock.return_value
     endpoint.find_neighbors.return_value = [[]]  # empty neighbour list by default
     return mock

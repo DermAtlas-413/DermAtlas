@@ -105,6 +105,107 @@ async def test_upload_stores_clinician_notes(
     assert row.clinician_notes == CLINICIAN_NOTES
 
 
+async def test_upload_without_notes_stores_null(
+    client, pcp_token, patient_record, db_session, mock_gcs
+):
+    """Omitting clinician_notes should store NULL, not an empty string."""
+    from sqlalchemy import select
+    from app.models.clinical_image import ClinicalImage
+
+    response = await client.post(
+        UPLOAD_URL,
+        files=[_jpeg_file()],
+        data={
+            "patient_id": str(patient_record.patient_id),
+            "lesion_location": LESION_LOCATION,
+        },
+        headers=pcp_token,
+    )
+    assert response.status_code == 201
+    query_id = response.json()["query_id"]
+
+    result = await db_session.execute(
+        select(ClinicalImage).where(ClinicalImage.query_id == query_id)
+    )
+    row = result.scalar_one_or_none()
+    assert row is not None
+    assert row.clinician_notes is None
+
+
+async def test_upload_notes_at_max_length_succeeds(
+    client, pcp_token, patient_record, db_session, mock_gcs
+):
+    """clinician_notes up to 2000 chars should be accepted and stored verbatim."""
+    from sqlalchemy import select
+    from app.models.clinical_image import ClinicalImage
+
+    notes_2000 = "a" * 2000
+    response = await client.post(
+        UPLOAD_URL,
+        files=[_jpeg_file()],
+        data={
+            "patient_id": str(patient_record.patient_id),
+            "lesion_location": LESION_LOCATION,
+            "clinician_notes": notes_2000,
+        },
+        headers=pcp_token,
+    )
+    assert response.status_code == 201
+    query_id = response.json()["query_id"]
+
+    result = await db_session.execute(
+        select(ClinicalImage).where(ClinicalImage.query_id == query_id)
+    )
+    row = result.scalar_one_or_none()
+    assert row is not None
+    assert row.clinician_notes == notes_2000
+
+
+async def test_upload_notes_over_limit_returns_422(
+    client, pcp_token, patient_record, mock_gcs
+):
+    """clinician_notes longer than 2000 chars must be rejected with 422."""
+    response = await client.post(
+        UPLOAD_URL,
+        files=[_jpeg_file()],
+        data={
+            "patient_id": str(patient_record.patient_id),
+            "lesion_location": LESION_LOCATION,
+            "clinician_notes": "a" * 2001,
+        },
+        headers=pcp_token,
+    )
+    assert response.status_code == 422
+
+
+async def test_upload_whitespace_only_notes_stored_as_null(
+    client, pcp_token, patient_record, db_session, mock_gcs
+):
+    """A whitespace-only notes payload should normalize to NULL."""
+    from sqlalchemy import select
+    from app.models.clinical_image import ClinicalImage
+
+    response = await client.post(
+        UPLOAD_URL,
+        files=[_jpeg_file()],
+        data={
+            "patient_id": str(patient_record.patient_id),
+            "lesion_location": LESION_LOCATION,
+            "clinician_notes": "   \n\t  ",
+        },
+        headers=pcp_token,
+    )
+    assert response.status_code == 201
+    query_id = response.json()["query_id"]
+
+    result = await db_session.execute(
+        select(ClinicalImage).where(ClinicalImage.query_id == query_id)
+    )
+    row = result.scalar_one_or_none()
+    assert row is not None
+    assert row.clinician_notes is None
+
+
 async def test_upload_stores_lesion_location(
     client, pcp_token, patient_record, db_session, mock_gcs
 ):
