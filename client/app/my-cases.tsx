@@ -72,7 +72,7 @@ export default function MyCases() {
   }
 
   function handleCasePress(queryId: string) {
-    router.push(`/case-detail?queryId=${encodeURIComponent(queryId)}`);
+    router.push({ pathname: "/case-detail", params: { queryId } });
   }
 
   return (

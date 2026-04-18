@@ -1,6 +1,5 @@
 """Unit tests for JWT creation/verification and password hashing utilities."""
 
-import time
 
 import pytest
 

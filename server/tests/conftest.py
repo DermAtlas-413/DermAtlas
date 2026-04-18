@@ -10,7 +10,6 @@ Engine strategy:
 
 from __future__ import annotations
 
-import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 

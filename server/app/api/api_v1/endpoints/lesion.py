@@ -92,7 +92,7 @@ async def analyze_lesion(
     # --- Generate embedding from the uploaded image ---
     try:
         embedding = _get_image_embedding(image.gcs_image_uri)
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to generate image embedding for %s", image.gcs_image_uri)
         raise HTTPException(status_code=503, detail="Image embedding service unavailable")
 
@@ -108,7 +108,7 @@ async def analyze_lesion(
             num_neighbors=_MAX_RESULTS,
         )
         neighbors = response[0] if response else []
-    except Exception as exc:
+    except Exception:
         logger.exception("Vertex AI vector search failed")
         raise HTTPException(status_code=503, detail="Vector search service unavailable")
 

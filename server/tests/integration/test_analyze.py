@@ -5,7 +5,6 @@ TDD — these will be red until the analyze endpoint, Vertex AI service,
 and audit log model are implemented.
 """
 
-import pytest
 
 ANALYZE_URL = "/api/v1/lesion/analyze"
 

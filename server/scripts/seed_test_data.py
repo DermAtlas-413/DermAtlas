@@ -264,13 +264,13 @@ def get_connection():
         use_cloud_sql = os.environ.get("USE_CLOUD_SQL_CONNECTOR", "").lower() == "true"
 
     if use_cloud_sql:
-        print(f"Connecting via Cloud SQL Connector...")
+        print("Connecting via Cloud SQL Connector...")
         print(f"  Instance: {os.environ.get('CLOUD_SQL_INSTANCE_CONNECTION_NAME', '?')}")
         print(f"  Database: {os.environ.get('PGDATABASE', '?')}")
         return connect_cloud_sql()
 
     if database_url:
-        print(f"Connecting via direct URL...")
+        print("Connecting via direct URL...")
         return connect_direct(database_url)
 
     print("ERROR: No database connection configured.", file=sys.stderr)
