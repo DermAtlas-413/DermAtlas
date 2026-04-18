@@ -21,6 +21,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
   return {
     ...config,
+    name: config.name ?? "DermAtlas",
+    slug: config.slug ?? "derm-atlas",
     extra: {
       apiBase,
       useMock,

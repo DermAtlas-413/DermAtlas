@@ -7,11 +7,9 @@ and GCS integration are implemented.
 
 import io
 
-import pytest
 
 from tests.fixtures.test_data import (
     CLINICIAN_NOTES,
-    GCS_URI,
     LESION_LOCATION,
     make_jpeg_bytes,
     make_png_bytes,

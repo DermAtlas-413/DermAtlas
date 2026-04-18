@@ -48,6 +48,18 @@ export interface ClinicalImageSummary {
   gcs_uri: string;
   captured_at: string | null;
   lesion_location: string;
+  visible_to_patient: boolean;
+}
+
+// GET /patients/me/cases/{query_id}
+export interface ClinicalImageDetail {
+  query_id: string;
+  gcs_uri: string;
+  captured_at: string | null;
+  lesion_location: string;
+  clinician_notes: string | null;
+  visible_to_patient: boolean;
+  physician_name: string | null;
 }
 
 export interface PatientResponse {
@@ -64,5 +76,12 @@ export interface PatientMeResponse {
   user_id: number;
   full_name: string;
   email: string;
+  physician_name: string | null;
   clinical_images: ClinicalImageSummary[];
+}
+
+// PATCH /clinical-images/{query_id}/visibility
+export interface VisibilityToggleResponse {
+  query_id: string;
+  visible_to_patient: boolean;
 }

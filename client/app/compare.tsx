@@ -16,6 +16,7 @@ import { useCurrentCaseStore } from "@/state/current-case-store";
 import { useRequireRole } from "@/hooks/use-require-role";
 import { analyzeLesion } from "@/services/lesion-service";
 import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
+import { VisibilityToggle } from "@/components/visibility-toggle";
 import type { AnalyzeMatch } from "@/types/api";
 import { displayRole } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
@@ -104,6 +105,11 @@ export default function Compare() {
               ) : null}
             </View>
           </View>
+
+          {/* Patient visibility toggle */}
+          {queryId && (
+            <VisibilityToggle queryId={queryId} />
+          )}
 
           {/* Submitted image */}
           <View style={styles.imageSection}>

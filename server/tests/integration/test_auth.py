@@ -6,11 +6,8 @@ Tests are written contract-first (TDD): they will fail (red) until the
 auth endpoint + User model + auth utilities are implemented.
 """
 
-import pytest
 
 from tests.fixtures.test_data import (
-    OTHER_PCP_EMAIL,
-    OTHER_PCP_PASSWORD,
     PATIENT_EMAIL,
     PATIENT_PASSWORD,
     PCP_EMAIL,

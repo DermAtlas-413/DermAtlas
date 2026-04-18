@@ -1,4 +1,4 @@
-"""Patient endpoints — list and detail views for PCP-owned patients."""
+"""Patient endpoints — list, detail, case views, and visibility toggle."""
 
 from __future__ import annotations
 
@@ -14,9 +14,28 @@ from app.models.audit_log import AuditLog
 from app.models.clinical_image import ClinicalImage
 from app.models.patient import Patient
 from app.models.user import User, UserRole
-from app.schemas.patient import ClinicalImageSummary, PatientMeResponse, PatientResponse
+from app.schemas.patient import (
+    ClinicalImageDetail,
+    ClinicalImageSummary,
+    PatientMeResponse,
+    PatientResponse,
+    VisibilityUpdate,
+)
 
 router = APIRouter()
+
+
+def _image_summary(img: ClinicalImage) -> ClinicalImageSummary:
+    return ClinicalImageSummary(
+        query_id=img.query_id,
+        gcs_uri=img.gcs_image_uri,
+        captured_at=img.captured_at.isoformat() if img.captured_at else None,
+        lesion_location=img.lesion_location,
+        visible_to_patient=img.visible_to_patient,
+    )
+
+
+# ── Patient self-service ─────────────────────────────────────────────
 
 
 @router.get("/patients/me", response_model=PatientMeResponse)
@@ -27,9 +46,27 @@ async def get_my_cases(
     if current_user.role != UserRole.PATIENT:
         raise HTTPException(status_code=403, detail="Patient access only")
 
+    patient_result = await db.execute(
+        select(Patient).where(Patient.user_id == current_user.user_id)
+    )
+    patient = patient_result.scalar_one_or_none()
+    if patient is None:
+        raise HTTPException(status_code=404, detail="No patient record linked to this account")
+
+    physician_name: str | None = None
+    physician_result = await db.execute(
+        select(User).where(User.user_id == patient.primary_physician_id)
+    )
+    physician = physician_result.scalar_one_or_none()
+    if physician:
+        physician_name = physician.full_name
+
     images_result = await db.execute(
         select(ClinicalImage)
-        .where(ClinicalImage.user_id == current_user.user_id)
+        .where(
+            ClinicalImage.patient_id == patient.patient_id,
+            ClinicalImage.visible_to_patient.is_(True),
+        )
         .order_by(ClinicalImage.captured_at.desc())
     )
     images = images_result.scalars().all()
@@ -38,16 +75,95 @@ async def get_my_cases(
         user_id=current_user.user_id,
         full_name=current_user.full_name,
         email=current_user.email,
-        clinical_images=[
-            ClinicalImageSummary(
-                query_id=img.query_id,
-                gcs_uri=img.gcs_image_uri,
-                captured_at=img.captured_at.isoformat() if img.captured_at else None,
-                lesion_location=img.lesion_location,
-            )
-            for img in images
-        ],
+        physician_name=physician_name,
+        clinical_images=[_image_summary(img) for img in images],
     )
+
+
+@router.get("/patients/me/cases/{query_id}", response_model=ClinicalImageDetail)
+async def get_my_case_detail(
+    query_id: str = Path(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ClinicalImageDetail:
+    if current_user.role != UserRole.PATIENT:
+        raise HTTPException(status_code=403, detail="Patient access only")
+
+    patient_result = await db.execute(
+        select(Patient).where(Patient.user_id == current_user.user_id)
+    )
+    patient = patient_result.scalar_one_or_none()
+    if patient is None:
+        raise HTTPException(status_code=404, detail="No patient record linked to this account")
+
+    img_result = await db.execute(
+        select(ClinicalImage).where(
+            ClinicalImage.query_id == query_id,
+            ClinicalImage.patient_id == patient.patient_id,
+        )
+    )
+    img = img_result.scalar_one_or_none()
+    if img is None or not img.visible_to_patient:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    physician_result = await db.execute(
+        select(User).where(User.user_id == img.user_id)
+    )
+    physician = physician_result.scalar_one_or_none()
+
+    db.add(
+        AuditLog(
+            user_id=current_user.user_id,
+            action="VIEW_OWN_CASE",
+            target_resource=f"image:{query_id}",
+        )
+    )
+    await db.flush()
+
+    return ClinicalImageDetail(
+        query_id=img.query_id,
+        gcs_uri=img.gcs_image_uri,
+        captured_at=img.captured_at.isoformat() if img.captured_at else None,
+        lesion_location=img.lesion_location,
+        clinician_notes=img.clinician_notes,
+        visible_to_patient=img.visible_to_patient,
+        physician_name=physician.full_name if physician else None,
+    )
+
+
+# ── PCP visibility toggle ────────────────────────────────────────────
+
+
+@router.patch("/clinical-images/{query_id}/visibility")
+async def toggle_visibility(
+    body: VisibilityUpdate,
+    query_id: str = Path(...),
+    current_user: User = Depends(require_pcp),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    img_result = await db.execute(
+        select(ClinicalImage).where(ClinicalImage.query_id == query_id)
+    )
+    img = img_result.scalar_one_or_none()
+    if img is None:
+        raise HTTPException(status_code=404, detail="Clinical image not found")
+    if img.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not your clinical image")
+
+    img.visible_to_patient = body.visible_to_patient
+    db.add(
+        AuditLog(
+            user_id=current_user.user_id,
+            action="TOGGLE_VISIBILITY",
+            target_resource=f"image:{query_id}",
+        )
+    )
+    await db.flush()
+
+    return {"query_id": query_id, "visible_to_patient": img.visible_to_patient}
+
+
+# ── PCP patient management ───────────────────────────────────────────
 
 
 @router.get("/patients", response_model=List[PatientResponse])
@@ -73,15 +189,7 @@ async def list_patients(
                 full_name=patient.full_name,
                 date_of_birth=patient.date_of_birth,
                 gender=patient.gender,
-                clinical_images=[
-                    ClinicalImageSummary(
-                        query_id=img.query_id,
-                        gcs_uri=img.gcs_image_uri,
-                        captured_at=img.captured_at.isoformat() if img.captured_at else None,
-                        lesion_location=img.lesion_location,
-                    )
-                    for img in images
-                ],
+                clinical_images=[_image_summary(img) for img in images],
             )
         )
     return responses
@@ -93,7 +201,6 @@ async def get_patient(
     current_user: User = Depends(require_pcp),
     db: AsyncSession = Depends(get_db),
 ) -> PatientResponse:
-    # --- Fetch patient ---
     result = await db.execute(select(Patient).where(Patient.patient_id == patient_id))
     patient = result.scalar_one_or_none()
     if patient is None:
@@ -101,13 +208,11 @@ async def get_patient(
     if patient.primary_physician_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Access to this patient is forbidden")
 
-    # --- Fetch clinical images ---
     images_result = await db.execute(
         select(ClinicalImage).where(ClinicalImage.patient_id == patient_id)
     )
     images = images_result.scalars().all()
 
-    # --- Audit log (HIPAA) ---
     db.add(
         AuditLog(
             user_id=current_user.user_id,
@@ -123,13 +228,5 @@ async def get_patient(
         full_name=patient.full_name,
         date_of_birth=patient.date_of_birth,
         gender=patient.gender,
-        clinical_images=[
-            ClinicalImageSummary(
-                query_id=img.query_id,
-                gcs_uri=img.gcs_image_uri,
-                captured_at=img.captured_at.isoformat() if img.captured_at else None,
-                lesion_location=img.lesion_location,
-            )
-            for img in images
-        ],
+        clinical_images=[_image_summary(img) for img in images],
     )
