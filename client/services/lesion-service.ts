@@ -4,11 +4,14 @@ import { API_BASE } from "./config";
 import { useAuthStore } from "@/state/auth-store";
 
 const MOCK_RESULTS: AnalyzeResponse = {
-  results: [
-    { reference_id: "1", diagnosis_label: "Seborrheic keratosis", score: 0.87, gcs_uri: null },
-    { reference_id: "2", diagnosis_label: "Benign nevus", score: 0.82, gcs_uri: null },
-    { reference_id: "3", diagnosis_label: "Actinic keratosis", score: 0.78, gcs_uri: null },
-    { reference_id: "4", diagnosis_label: "Basal cell carcinoma", score: 0.74, gcs_uri: null },
+  benign_results: [
+    { reference_id: "1", diagnosis_label: "Seborrheic keratosis", diagnosis_type: "Benign", score: 0.87, gcs_uri: null },
+    { reference_id: "2", diagnosis_label: "Benign nevus", diagnosis_type: "Benign", score: 0.82, gcs_uri: null },
+    { reference_id: "3", diagnosis_label: "Actinic keratosis", diagnosis_type: "Benign", score: 0.78, gcs_uri: null },
+  ],
+  malignant_results: [
+    { reference_id: "4", diagnosis_label: "Basal cell carcinoma", diagnosis_type: "Malignant", score: 0.74, gcs_uri: null },
+    { reference_id: "5", diagnosis_label: "Melanoma", diagnosis_type: "Malignant", score: 0.69, gcs_uri: null },
   ],
 };
 

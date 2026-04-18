@@ -32,7 +32,8 @@ export default function Compare() {
   const patientId = useCurrentCaseStore((s) => s.patientId);
   const imageUri = useCurrentCaseStore((s) => s.imageUri);
   const setFeedbackTarget = useCurrentCaseStore((s) => s.setFeedbackTarget);
-  const [matches, setMatches] = useState<AnalyzeMatch[]>([]);
+  const [benignMatches, setBenignMatches] = useState<AnalyzeMatch[]>([]);
+  const [malignantMatches, setMalignantMatches] = useState<AnalyzeMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +43,10 @@ export default function Compare() {
     if (!authorized) return;
     setError(null);
     analyzeLesion(queryId ?? "mock")
-      .then((res) => setMatches(res.results))
+      .then((res) => {
+        setBenignMatches(res.benign_results);
+        setMalignantMatches(res.malignant_results);
+      })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
       })
@@ -131,41 +135,92 @@ export default function Compare() {
             </View>
           )}
 
-          {/* Similar cases */}
-          <View>
-            <Text style={styles.sectionLabel}>
-              Similar Cases &nbsp;
-              <Text style={styles.sectionCount}>
-                {matches.length} matches
-              </Text>
-            </Text>
-            {loading ? (
-              <ActivityIndicator size="large" color={D.primary} style={{ marginTop: 20 }} />
-            ) : (
-            <View style={styles.grid}>
-              {matches.map((m) => (
-                <MatchCard
-                  key={m.reference_id}
-                  m={m}
-                  onPress={() => {
-                    const similarity = Math.round(m.score * 100);
-                    setFeedbackTarget({
-                      matchId: m.reference_id,
-                      referenceId: m.reference_id,
-                      diagnosis: m.diagnosis_label ?? "",
-                      similarity,
-                      referenceImageUri: m.gcs_uri ?? "",
-                    });
-                    router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
-                  }}
-                />
-              ))}
-            </View>
-            )}
-          </View>
+          {/* Similar cases — split into benign and malignant */}
+          {loading ? (
+            <ActivityIndicator size="large" color={D.primary} style={{ marginTop: 20 }} />
+          ) : (
+            <>
+              <MatchSection
+                title="Closest Benign Matches"
+                accent={D.success}
+                accentBg={D.successBg}
+                matches={benignMatches}
+                emptyHint="No close benign matches in the atlas"
+                onPressMatch={(m) => {
+                  const similarity = Math.round(m.score * 100);
+                  setFeedbackTarget({
+                    matchId: m.reference_id,
+                    referenceId: m.reference_id,
+                    diagnosis: m.diagnosis_label ?? "",
+                    similarity,
+                    referenceImageUri: m.gcs_uri ?? "",
+                  });
+                  router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
+                }}
+              />
+              <MatchSection
+                title="Closest Malignant Matches"
+                accent={D.danger}
+                accentBg={D.dangerBg}
+                matches={malignantMatches}
+                emptyHint="No close malignant matches in the atlas"
+                onPressMatch={(m) => {
+                  const similarity = Math.round(m.score * 100);
+                  setFeedbackTarget({
+                    matchId: m.reference_id,
+                    referenceId: m.reference_id,
+                    diagnosis: m.diagnosis_label ?? "",
+                    similarity,
+                    referenceImageUri: m.gcs_uri ?? "",
+                  });
+                  router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
+                }}
+              />
+            </>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function MatchSection({
+  title,
+  accent,
+  accentBg,
+  matches,
+  emptyHint,
+  onPressMatch,
+}: {
+  title: string;
+  accent: string;
+  accentBg: string;
+  matches: AnalyzeMatch[];
+  emptyHint: string;
+  onPressMatch: (m: AnalyzeMatch) => void;
+}) {
+  return (
+    <View style={styles.matchSection}>
+      <View style={[styles.sectionHeader, { backgroundColor: accentBg }]}>
+        <View style={[styles.sectionDot, { backgroundColor: accent }]} />
+        <Text style={[styles.sectionHeaderText, { color: accent }]}>{title}</Text>
+        <Text style={[styles.sectionHeaderCount, { color: accent }]}>
+          {matches.length}
+        </Text>
+      </View>
+      {matches.length === 0 ? (
+        <View style={styles.emptyState}>
+          <MaterialCommunityIcons name="image-off-outline" size={22} color={D.muted} />
+          <Text style={styles.emptyStateText}>{emptyHint}</Text>
+        </View>
+      ) : (
+        <View style={styles.grid}>
+          {matches.map((m) => (
+            <MatchCard key={m.reference_id} m={m} onPress={() => onPressMatch(m)} />
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -381,6 +436,47 @@ const styles = StyleSheet.create({
     height: "100%",
   },
 
+  matchSection: { gap: 10, marginBottom: 8 },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  sectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  sectionHeaderText: {
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    flex: 1,
+  },
+  sectionHeaderCount: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  emptyState: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 18,
+    backgroundColor: D.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: D.border,
+    borderStyle: "dashed",
+  },
+  emptyStateText: {
+    color: D.muted,
+    fontSize: 12,
+    fontWeight: "600",
+  },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",

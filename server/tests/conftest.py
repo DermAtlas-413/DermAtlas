@@ -24,6 +24,10 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from tests.fixtures.test_data import (
+    BENIGN_DIAGNOSIS_LABEL,
+    BENIGN_DIAGNOSIS_TYPE,
+    BENIGN_REF_GCS_URI,
+    BENIGN_REF_VERTEX_ID,
     CLINICIAN_NOTES,
     DIAGNOSIS_LABEL,
     DIAGNOSIS_TYPE,
@@ -244,7 +248,7 @@ async def clinical_image(db_session: AsyncSession, pcp_user, patient_record):
 
 @pytest_asyncio.fixture
 async def reference_image(db_session: AsyncSession):
-    """Insert a ReferenceAtlas row."""
+    """Insert a malignant ReferenceAtlas row (kept for backwards-compat with existing tests)."""
     from app.models.reference_atlas import ReferenceAtlas
 
     ref = ReferenceAtlas(
@@ -260,6 +264,32 @@ async def reference_image(db_session: AsyncSession):
     await db_session.flush()
     await db_session.refresh(ref)
     return ref
+
+
+@pytest_asyncio.fixture
+async def benign_reference_image(db_session: AsyncSession):
+    """Insert a benign ReferenceAtlas row."""
+    from app.models.reference_atlas import ReferenceAtlas
+
+    ref = ReferenceAtlas(
+        gcs_image_uri=BENIGN_REF_GCS_URI,
+        vertex_vector_id=BENIGN_REF_VERTEX_ID,
+        diagnosis_label=BENIGN_DIAGNOSIS_LABEL,
+        diagnosis_type=BENIGN_DIAGNOSIS_TYPE,
+        modality="dermoscopy",
+        body_part="skin",
+        source_dataset="ISIC",
+    )
+    db_session.add(ref)
+    await db_session.flush()
+    await db_session.refresh(ref)
+    return ref
+
+
+@pytest_asyncio.fixture
+async def malignant_reference_image(reference_image):
+    """Alias for reference_image — the default reference fixture is malignant."""
+    return reference_image
 
 
 # ---------------------------------------------------------------------------
