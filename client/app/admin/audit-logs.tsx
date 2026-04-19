@@ -43,7 +43,7 @@ function getDateRange(filter: DateFilter): { from?: string; to?: string } {
 const PAGE_SIZE = 20;
 
 export default function AuditLogs() {
-  const authorized = useRequireRole("PCP");
+  const authorized = useRequireRole({ role: "PCP", adminOnly: true });
   const router = useRouter();
 
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);

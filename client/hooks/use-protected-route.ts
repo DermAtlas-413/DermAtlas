@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { useSegments, useRouter, useNavigationContainerRef } from "expo-router";
 import { useAuthStore } from "@/state/auth-store";
 
-const PCP_ONLY: string[] = ["upload", "compare", "feedback", "admin"];
+const PCP_ONLY: string[] = ["upload", "compare", "feedback"];
+const ADMIN_ONLY: string[] = ["admin"];
 const PATIENT_ONLY: string[] = ["my-cases"];
+const PUBLIC_ROUTES: string[] = ["register"];
 
 /**
  * Global auth + role guard. Call once from the root layout.
@@ -35,9 +37,11 @@ export function useProtectedRoute() {
     if (!hydrated || !navReady) return;
 
     const onLoginScreen = !segments[0];
+    const prefix = segments[0] as string | undefined;
+    const onPublicRoute = !!prefix && PUBLIC_ROUTES.includes(prefix);
 
     if (!token) {
-      if (!onLoginScreen) router.replace("/");
+      if (!onLoginScreen && !onPublicRoute) router.replace("/");
       return;
     }
 
@@ -46,7 +50,6 @@ export function useProtectedRoute() {
       return;
     }
 
-    const prefix = segments[0] as string | undefined;
     if (!prefix) return;
 
     if (user?.role === "PATIENT" && PCP_ONLY.includes(prefix)) {
@@ -55,5 +58,8 @@ export function useProtectedRoute() {
     if (user?.role === "PCP" && PATIENT_ONLY.includes(prefix)) {
       router.replace("/upload");
     }
-  }, [token, segments, user?.role, hydrated, navReady]);
+    if (ADMIN_ONLY.includes(prefix) && !user?.isAdmin) {
+      router.replace(user?.role === "PATIENT" ? "/my-cases" : "/upload");
+    }
+  }, [token, segments, user?.role, user?.isAdmin, hydrated, navReady]);
 }

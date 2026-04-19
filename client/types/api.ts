@@ -12,6 +12,24 @@ export interface UserInfo {
   email: string;
   fullName: string;
   role: UserRole;
+  networkId: number | null;
+  isAdmin: boolean;
+}
+
+export interface Network {
+  network_id: number;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
+// POST /auth/register-network
+export interface RegisterNetworkPayload {
+  network_name: string;
+  admin_email: string;
+  admin_password: string;
+  admin_full_name: string;
+  admin_npi: string;
 }
 
 // POST /auth/token
