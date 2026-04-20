@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
+from pgvector.sqlalchemy import Vector
 
 from app.db.base import Base
 
@@ -23,3 +25,6 @@ class ReferenceAtlas(Base):
     modality: Mapped[str] = mapped_column(String(50), nullable=False)
     body_part: Mapped[str] = mapped_column(String(100), nullable=False)
     source_dataset: Mapped[str] = mapped_column(String(100), nullable=False)
+    embedding_vector: Mapped[Optional[list[float]]] = mapped_column(
+        Vector(1408), nullable=True
+    )

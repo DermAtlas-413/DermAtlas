@@ -1,0 +1,299 @@
+\documentclass[12pt]{article}
+
+% ── Packages ──────────────────────────────────────────────────────────────────
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{bm}
+\usepackage{mathtools}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta}
+
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+
+\title{\textbf{MLP Head for Skin Lesion Classification}\\
+\large DermAtlas ML Pipeline --- Phase 3}
+\author{DermAtlas Team}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Overview}
+
+The Multi-Layer Perceptron (MLP) is a feed-forward neural network that maps a
+frozen 1408-dimensional Vertex AI embedding to a probability distribution over
+6 skin lesion classes. It is trained on labeled images only and its outputs are
+used as features for XGBoost in Phase 4.
+
+\medskip
+\noindent The 6 classes are:
+\[
+\mathcal{C} = \{\text{mel},\ \text{nv},\ \text{bcc},\ \text{akiec},\ \text{bkl},\ \text{df}\}
+\]
+where \textit{mel}, \textit{bcc}, \textit{akiec} are malignant and
+\textit{nv}, \textit{bkl}, \textit{df} are benign.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Architecture}
+
+\subsection{Layer Definitions}
+
+Let $\bm{x} \in \mathbb{R}^{1408}$ be the frozen embedding for one image.
+The MLP applies three successive linear transformations with non-linear
+activations:
+
+\[
+\bm{h}_1 = \text{ReLU}\!\left(\bm{W}_1 \bm{x} + \bm{b}_1\right),
+\quad \bm{W}_1 \in \mathbb{R}^{512 \times 1408},\ \bm{b}_1 \in \mathbb{R}^{512}
+\]
+
+\[
+\bm{h}_2 = \text{ReLU}\!\left(\bm{W}_2 \bm{h}_1' + \bm{b}_2\right),
+\quad \bm{W}_2 \in \mathbb{R}^{256 \times 512},\ \bm{b}_2 \in \mathbb{R}^{256}
+\]
+
+\[
+\bm{z} = \bm{W}_3 \bm{h}_2' + \bm{b}_3,
+\quad \bm{W}_3 \in \mathbb{R}^{6 \times 256},\ \bm{b}_3 \in \mathbb{R}^{6}
+\]
+
+where $\bm{h}_1'$ and $\bm{h}_2'$ denote the post-dropout versions of
+$\bm{h}_1$ and $\bm{h}_2$ respectively, and $\bm{z} \in \mathbb{R}^6$ are
+the raw \textit{logits}.
+
+\subsection{ReLU Activation}
+
+The Rectified Linear Unit introduces non-linearity:
+\[
+\text{ReLU}(z_i) = \max(0,\ z_i)
+\]
+Without this, stacking linear layers collapses to a single linear
+transformation regardless of depth.
+
+\subsection{Dropout Regularisation}
+
+During training, each hidden activation is independently zeroed with
+probability $p = 0.3$:
+\[
+h_i' = \frac{1}{1-p} \cdot h_i \cdot \mathbb{1}[\xi_i > p],
+\quad \xi_i \sim \text{Uniform}(0,1)
+\]
+The $\frac{1}{1-p}$ scaling preserves the expected magnitude of activations.
+During inference, dropout is disabled and $\bm{h}' = \bm{h}$.
+
+\subsection{Output: Softmax Probability Vector}
+
+The logit vector $\bm{z}$ is converted to a probability distribution:
+\[
+\hat{p}_k = \text{Softmax}(\bm{z})_k = \frac{e^{z_k}}{\sum_{j=1}^{6} e^{z_j}},
+\quad k \in \{1,\ldots,6\}
+\]
+
+This guarantees $\hat{p}_k \geq 0$ and $\sum_k \hat{p}_k = 1$.
+The output $\hat{\bm{p}} \in \mathbb{R}^6$ represents the model's belief over
+the 6 classes:
+\[
+\hat{\bm{p}} =
+\begin{bmatrix}
+\hat{p}_\text{mel} & \hat{p}_\text{nv} & \hat{p}_\text{bcc} &
+\hat{p}_\text{akiec} & \hat{p}_\text{bkl} & \hat{p}_\text{df}
+\end{bmatrix}^\top
+\]
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Loss Function}
+
+\subsection{Cross-Entropy Loss}
+
+Given the true class label $c \in \{1,\ldots,6\}$ for a training image, the
+cross-entropy loss is:
+\[
+\mathcal{L} = -\log \hat{p}_c = -z_c + \log\!\left(\sum_{j=1}^{6} e^{z_j}\right)
+\]
+
+Intuitively, this penalises the model for assigning low probability to the
+correct class. The loss is 0 when $\hat{p}_c = 1$ (perfect confidence) and
+approaches $\infty$ as $\hat{p}_c \to 0$.
+
+\subsection{Weighted Cross-Entropy for Class Imbalance}
+
+The dataset has a severe class imbalance ($\sim$75:1 between nv and df).
+Without correction, the model maximises accuracy by ignoring rare classes.
+We assign each class $k$ an inverse-frequency weight:
+
+\[
+w_k = \frac{1}{n_k + \varepsilon}, \quad \text{normalised so that}\ \frac{1}{6}\sum_k w_k = 1
+\]
+
+where $n_k$ is the training count for class $k$ and $\varepsilon = 10^{-6}$
+prevents division by zero. The weighted loss for a single example of class $c$ is:
+\[
+\mathcal{L}_w = -w_c \log \hat{p}_c
+\]
+
+Over a mini-batch $\mathcal{B}$ of size $B$:
+\[
+\mathcal{L}_{\text{batch}} = -\frac{1}{B} \sum_{i \in \mathcal{B}} w_{c_i} \log \hat{p}_{c_i}
+\]
+
+\medskip
+\noindent Approximate weights for our dataset:
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+\textbf{Class} & \textbf{Count} $n_k$ & \textbf{Weight} $w_k$ \\
+\midrule
+mel   & 5{,}106  & 0.26 \\
+nv    & 18{,}068 & 0.07 \\
+bcc   & 3{,}323  & 0.40 \\
+akiec & 1{,}064  & 1.24 \\
+bkl   & 2{,}847  & 0.46 \\
+df    &   239    & 5.57 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Training}
+
+\subsection{Optimiser}
+
+Parameters $\bm{\theta} = \{\bm{W}_1, \bm{b}_1, \bm{W}_2, \bm{b}_2, \bm{W}_3, \bm{b}_3\}$
+are updated with Adam:
+\[
+\bm{m}_t = \beta_1 \bm{m}_{t-1} + (1-\beta_1)\nabla_{\bm{\theta}}\mathcal{L}_t
+\]
+\[
+\bm{v}_t = \beta_2 \bm{v}_{t-1} + (1-\beta_2)(\nabla_{\bm{\theta}}\mathcal{L}_t)^2
+\]
+\[
+\bm{\theta}_{t+1} = \bm{\theta}_t
+  - \frac{\eta}{\sqrt{\hat{\bm{v}}_t} + \epsilon}\,\hat{\bm{m}}_t
+\]
+
+where $\hat{\bm{m}}_t, \hat{\bm{v}}_t$ are bias-corrected estimates,
+$\eta = 10^{-3}$ is the learning rate, and $\beta_1 = 0.9$, $\beta_2 = 0.999$.
+Weight decay $\lambda = 10^{-4}$ is applied (AdamW style) to prevent
+overfitting.
+
+\subsection{Learning Rate Schedule}
+
+\texttt{ReduceLROnPlateau}: if validation loss does not improve for 5 consecutive
+epochs, the learning rate is multiplied by 0.5:
+\[
+\eta \leftarrow 0.5 \cdot \eta
+\]
+
+\subsection{Early Stopping}
+
+Training halts if validation loss does not improve for \textit{patience} $= 10$
+consecutive epochs. The model state from the best validation epoch is restored.
+This prevents overfitting to the training split without requiring a fixed number
+of epochs.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Out-of-Fold (OOF) Discipline}
+
+\subsection{Why OOF is Required}
+
+The MLP outputs $\hat{\bm{p}}$ are used as input features to XGBoost in
+Phase 4. If XGBoost trains on softmax predictions from a model that also
+trained on those same images, the MLP will have \textit{memorised} its
+training data. XGBoost would then learn from overfit outputs, causing
+inflated training metrics and poor generalisation.
+
+\subsection{5-Fold OOF Procedure}
+
+Let $\mathcal{D} = \{(\bm{x}_i, c_i)\}_{i=1}^{N}$ be the $N = 30{,}647$
+labeled training samples. We partition $\mathcal{D}$ into 5 stratified folds
+$\mathcal{D}_1, \ldots, \mathcal{D}_5$ such that class proportions are
+approximately preserved in each fold.
+
+\medskip
+\noindent For fold $f \in \{1,\ldots,5\}$:
+\begin{enumerate}
+    \item Train MLP on $\mathcal{D} \setminus \mathcal{D}_f$ (4 folds)
+    \item Predict softmax on $\mathcal{D}_f$ (held-out fold):
+    \[
+    \hat{\bm{p}}_i^{\text{OOF}} = \text{Softmax}\!\left(\text{MLP}_f(\bm{x}_i)\right),
+    \quad i \in \mathcal{D}_f
+    \]
+\end{enumerate}
+
+After all 5 folds, every sample has exactly one OOF prediction. Concatenating:
+\[
+\hat{P}^{\text{OOF}} \in \mathbb{R}^{N \times 6}
+\]
+
+This matrix is saved as \texttt{oof\_softmax.npy} and fed to XGBoost as
+training features. Because each $\hat{\bm{p}}_i^{\text{OOF}}$ was produced
+by a model that \textit{never} saw $\bm{x}_i$ during training, the predictions
+are unbiased estimates of real-world model behaviour.
+
+\subsection{Final Model}
+
+Separately, one final MLP is trained on \textit{all} $N$ labeled samples.
+This model is used for inference when a physician uploads a new image:
+\[
+\hat{\bm{p}}_{\text{new}} = \text{Softmax}\!\left(\text{MLP}_{\text{final}}(\bm{x}_{\text{new}})\right)
+\]
+
+\medskip
+\noindent In total, \textbf{6 MLP models} are trained: 5 for OOF generation,
+1 for production inference.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{How MLP Outputs Feed into XGBoost}
+
+The 6-dimensional softmax output $\hat{\bm{p}}$ is a compressed,
+semantically meaningful representation of the image. XGBoost receives:
+
+\[
+\bm{f}_i =
+\underbrace{\hat{\bm{p}}_i^{\text{OOF}}}_{\text{MLP: 6 dims}}
+\oplus
+\underbrace{[\text{age},\ \text{sex},\ \text{localization}]}_{\text{metadata: 3 dims}}
+\oplus
+\underbrace{[\text{knn\_mean\_dist},\ \text{knn\_min\_dist},\ \text{knn\_std\_dist},\ \text{lof\_score}]}_{\text{cohort scores: 4 dims}}
+\]
+
+XGBoost then predicts binary malignancy $\hat{y} \in \{0, 1\}$ from
+$\bm{f}_i \in \mathbb{R}^{13}$.
+
+\medskip
+\noindent The rationale for this two-stage design:
+\begin{itemize}
+    \item The MLP handles the high-dimensional embedding $\rightarrow$ class
+    probability mapping (non-linear, 1408 $\rightarrow$ 6).
+    \item XGBoost handles clinical feature interactions
+    (e.g.\ high \texttt{knn\_mean\_dist} $\times$ high $\hat{p}_\text{mel}$ $\Rightarrow$ very suspicious).
+    \item The Bayesian update layer is applied \textit{after} XGBoost at
+    inference time, allowing the physician to adjust clinical context
+    interactively without rerunning either model.
+\end{itemize}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Parameter Count}
+
+Total trainable parameters:
+
+\begin{align*}
+\bm{W}_1,\bm{b}_1 &: 1408 \times 512 + 512 = 721{,}408 \\
+\bm{W}_2,\bm{b}_2 &: 512 \times 256 + 256 = 131{,}328 \\
+\bm{W}_3,\bm{b}_3 &: 256 \times 6 + 6 = 1{,}542 \\
+\hline
+\text{Total} &: 854{,}278 \text{ parameters}
+\end{align*}
+
+Compare to the frozen Vertex AI encoder ($\sim$600M parameters) --- the MLP
+head is 700$\times$ smaller and trains in minutes on CPU.
+
+\end{document}
