@@ -29,12 +29,14 @@ export interface UploadResponse {
 export interface AnalyzeMatch {
   reference_id: string;
   diagnosis_label: string | null;
+  diagnosis_type: string | null;
   score: number;
   gcs_uri: string | null;
 }
 
 export interface AnalyzeResponse {
-  results: AnalyzeMatch[];
+  benign_results: AnalyzeMatch[];
+  malignant_results: AnalyzeMatch[];
 }
 
 // POST /feedback

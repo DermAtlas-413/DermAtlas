@@ -42,9 +42,16 @@ VERTEX_VECTOR_ID = "vec-123abc"
 # ---------------------------------------------------------------------------
 
 DIAGNOSIS_LABEL = "Melanoma"
-DIAGNOSIS_TYPE = "malignant"
+DIAGNOSIS_TYPE = "Malignant"
 REF_GCS_URI = "gs://dermatlas-ref/atlas/melanoma-001.jpg"
 REF_VERTEX_ID = "ref-vec-456def"
+
+BENIGN_DIAGNOSIS_LABEL = "Melanocytic Nevus"
+BENIGN_DIAGNOSIS_TYPE = "Benign"
+BENIGN_REF_GCS_URI = "gs://dermatlas-ref/atlas/nevus-001.jpg"
+BENIGN_REF_VERTEX_ID = "ref-vec-benign-001"
+
+MALIGNANT_DIAGNOSIS_TYPE = "Malignant"
 
 # ---------------------------------------------------------------------------
 # Payload builders

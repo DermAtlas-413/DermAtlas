@@ -132,6 +132,54 @@ async def test_get_patient_no_images_returns_empty_list(client, pcp_token, patie
     assert response.json()["clinical_images"] == []
 
 
+async def test_get_my_case_detail_returns_clinician_notes(
+    client, patient_token, patient_user, pcp_user, db_session, mock_gcs
+):
+    """
+    A patient viewing their own case via /patients/me/cases/{query_id} must
+    receive the clinician_notes attached at upload time.
+    """
+    from app.models.clinical_image import ClinicalImage
+    from app.models.patient import Patient
+    from tests.fixtures.test_data import (
+        CLINICIAN_NOTES,
+        GCS_URI,
+        LESION_LOCATION,
+        PATIENT_DOB,
+        PATIENT_GENDER,
+        PATIENT_MRN,
+    )
+
+    patient = Patient(
+        user_id=patient_user.user_id,
+        primary_physician_id=pcp_user.user_id,
+        mrn_internal=PATIENT_MRN,
+        date_of_birth=PATIENT_DOB,
+        gender=PATIENT_GENDER,
+    )
+    db_session.add(patient)
+    await db_session.flush()
+
+    image = ClinicalImage(
+        user_id=pcp_user.user_id,
+        patient_id=patient.patient_id,
+        gcs_image_uri=GCS_URI,
+        lesion_location=LESION_LOCATION,
+        clinician_notes=CLINICIAN_NOTES,
+        visible_to_patient=True,
+    )
+    db_session.add(image)
+    await db_session.flush()
+
+    response = await client.get(
+        f"/api/v1/patients/me/cases/{image.query_id}",
+        headers=patient_token,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["clinician_notes"] == CLINICIAN_NOTES
+
+
 async def test_get_patient_creates_audit_log(
     client, pcp_token, pcp_user, patient_record, db_session
 ):

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
+from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
@@ -23,6 +24,10 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from tests.fixtures.test_data import (
+    BENIGN_DIAGNOSIS_LABEL,
+    BENIGN_DIAGNOSIS_TYPE,
+    BENIGN_REF_GCS_URI,
+    BENIGN_REF_VERTEX_ID,
     CLINICIAN_NOTES,
     DIAGNOSIS_LABEL,
     DIAGNOSIS_TYPE,
@@ -243,7 +248,7 @@ async def clinical_image(db_session: AsyncSession, pcp_user, patient_record):
 
 @pytest_asyncio.fixture
 async def reference_image(db_session: AsyncSession):
-    """Insert a ReferenceAtlas row."""
+    """Insert a malignant ReferenceAtlas row (kept for backwards-compat with existing tests)."""
     from app.models.reference_atlas import ReferenceAtlas
 
     ref = ReferenceAtlas(
@@ -259,6 +264,32 @@ async def reference_image(db_session: AsyncSession):
     await db_session.flush()
     await db_session.refresh(ref)
     return ref
+
+
+@pytest_asyncio.fixture
+async def benign_reference_image(db_session: AsyncSession):
+    """Insert a benign ReferenceAtlas row."""
+    from app.models.reference_atlas import ReferenceAtlas
+
+    ref = ReferenceAtlas(
+        gcs_image_uri=BENIGN_REF_GCS_URI,
+        vertex_vector_id=BENIGN_REF_VERTEX_ID,
+        diagnosis_label=BENIGN_DIAGNOSIS_LABEL,
+        diagnosis_type=BENIGN_DIAGNOSIS_TYPE,
+        modality="dermoscopy",
+        body_part="skin",
+        source_dataset="ISIC",
+    )
+    db_session.add(ref)
+    await db_session.flush()
+    await db_session.refresh(ref)
+    return ref
+
+
+@pytest_asyncio.fixture
+async def malignant_reference_image(reference_image):
+    """Alias for reference_image — the default reference fixture is malignant."""
+    return reference_image
 
 
 # ---------------------------------------------------------------------------
@@ -316,10 +347,24 @@ def mock_gcs(mocker):
 
 @pytest.fixture
 def mock_vertex(mocker):
-    """Patch the Vertex AI vector search query method."""
-    mock = mocker.patch(
-        "google.cloud.aiplatform.MatchingEngineIndexEndpoint"
+    """Patch the Vertex AI vector search endpoint AND the multimodal embedding model.
+
+    The analyze endpoint calls both:
+      - `vertexai.vision_models.MultiModalEmbeddingModel.from_pretrained(...).get_embeddings(...)`
+        to embed the uploaded image
+      - `google.cloud.aiplatform.MatchingEngineIndexEndpoint(...).find_neighbors(...)`
+        to query the vector index
+    Both must be mocked to keep tests offline and deterministic.
+    """
+    mocker.patch("vertexai.init")
+    embed_model_cls = mocker.patch(
+        "app.api.api_v1.endpoints.lesion.MultiModalEmbeddingModel"
     )
+    embedding_result = MagicMock()
+    embedding_result.image_embedding = [0.0] * 1408
+    embed_model_cls.from_pretrained.return_value.get_embeddings.return_value = embedding_result
+
+    mock = mocker.patch("google.cloud.aiplatform.MatchingEngineIndexEndpoint")
     endpoint = mock.return_value
     endpoint.find_neighbors.return_value = [[]]  # empty neighbour list by default
     return mock

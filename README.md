@@ -18,6 +18,13 @@ DermAtlas is a Clinical Decision Support (CDS) system designed to assist Primary
 ### Frontend
 Navigate to `client/`, install dependencies with `npm install`, and run `npx expo start`.
 
+To exercise the UI without a live backend or GCP credentials, start Expo with mock data:
+```bash
+cd client
+USE_MOCK=true npx expo start
+```
+Mock data is wired up in `client/services/*.ts` and matches the real response shapes, so every screen renders (including the split benign/malignant similarity results on the compare screen).
+
 ### Backend (local)
 
 **Prerequisites:** Python 3.11+, Docker
@@ -38,15 +45,36 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 **3. Apply database migrations**
 ```bash
-alembic upgrade head
+ENV=development alembic upgrade head
 ```
 
-**4. Run the dev server**
+**4. Seed test users**
+```bash
+ENV=development python scripts/seed_users.py
+```
+This inserts two PCP accounts you can log in with:
+
+| Email | Password |
+|---|---|
+| `dr.smith@dermatlas.test` | `TestPass123!` |
+| `dr.jones@dermatlas.test` | `TestPass123!` |
+
+Re-running the script is safe — it skips users that already exist.
+
+**5. Run the dev server**
 ```bash
 uvicorn app.main:app --reload
 ```
 
 The API is now available at `http://localhost:8000`.
+
+> **Note on GCP-backed features:** `POST /api/v1/upload/image` and `POST /api/v1/lesion/analyze` call Google Cloud Storage and Vertex AI. For these to succeed end-to-end you need `GCP_PROJECT_ID`, `GCS_BUCKET_NAME`, and `VERTEX_AI_INDEX_ENDPOINT` set in `server/.env`, plus `gcloud auth application-default login` for ADC. If you only need to verify UI changes, skip this and run the client with `USE_MOCK=true` (see above).
+
+**Tear-down when you're done:**
+```bash
+cd server && docker compose down          # keep the data volume
+cd server && docker compose down -v       # also wipe dermatlas_dev_data
+```
 
 #### API Documentation
 

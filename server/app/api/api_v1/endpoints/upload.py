@@ -30,10 +30,13 @@ async def upload_image(
     file: UploadFile = File(...),
     patient_id: int = Form(...),
     lesion_location: str = Form(...),
-    clinician_notes: Optional[str] = Form(None),
+    clinician_notes: Optional[str] = Form(None, max_length=2000),
     current_user: User = Depends(require_pcp),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    if clinician_notes is not None:
+        stripped = clinician_notes.strip()
+        clinician_notes = stripped if stripped else None
     # --- Validate content type ---
     if file.content_type not in _ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Only JPEG and PNG files are accepted")

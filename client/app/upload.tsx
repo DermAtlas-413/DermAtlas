@@ -3,6 +3,7 @@ import {
   SafeAreaView,
   View,
   Text,
+  TextInput,
   Pressable,
   StyleSheet,
   ScrollView,
@@ -30,7 +31,10 @@ export default function Upload() {
   const setCase = useCurrentCaseStore((s) => s.setCase);
   const [selectedPatient, setSelectedPatient] = useState<PatientResponse | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [notes, setNotes] = useState<string>("");
   const [uploading, setUploading] = useState(false);
+
+  const NOTES_MAX = 2000;
 
   const { pickFromCamera, pickFromLibrary } = useImageCapture(setImageUri);
 
@@ -54,7 +58,13 @@ export default function Upload() {
     try {
       const response = await fetch(imageUri);
       const blob = await response.blob();
-      const res = await uploadImage(blob, selectedPatient.patient_id, "unspecified");
+      const trimmedNotes = notes.trim();
+      const res = await uploadImage(
+        blob,
+        selectedPatient.patient_id,
+        "unspecified",
+        trimmedNotes || undefined,
+      );
       setCase({
         patientId: selectedPatient.patient_id,
         patientMrn: selectedPatient.mrn_internal,
@@ -171,6 +181,27 @@ export default function Upload() {
                 </Pressable>
               </View>
             </View>
+          </View>
+
+          {/* Clinician notes */}
+          <View style={styles.section}>
+            <View style={styles.notesHeader}>
+              <Text style={styles.sectionLabel}>Notes / Diagnosis</Text>
+              <Text style={styles.notesCounter}>
+                {notes.length}/{NOTES_MAX}
+              </Text>
+            </View>
+            <TextInput
+              style={styles.notesInput}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Optional clinical observations, working diagnosis, or differential..."
+              placeholderTextColor={D.muted}
+              multiline
+              maxLength={NOTES_MAX}
+              editable={!uploading}
+              textAlignVertical="top"
+            />
           </View>
 
           {/* Guideline */}
@@ -300,6 +331,28 @@ const styles = StyleSheet.create({
   actionCardPressed: { opacity: 0.8 },
   actionIconWrap: {},
   actionLabel: { color: D.primary, fontWeight: "700", fontSize: 13 },
+
+  notesHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  notesCounter: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: D.muted,
+  },
+  notesInput: {
+    backgroundColor: D.surface,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: D.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 110,
+    fontSize: 14,
+    color: D.text,
+  },
 
   guideCard: {
     flexDirection: "row",
