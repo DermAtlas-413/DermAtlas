@@ -105,6 +105,21 @@ export default function Profile() {
             </View>
           </View>
 
+          {/* Inbox section - PCP only */}
+          {user?.role === "PCP" && (
+          <View style={styles.menuGroup}>
+            <SectionHeader title="Communication" />
+            <View style={styles.menuCard}>
+              <MenuRow
+              icon="inbox-outline"
+              label="Inbox"
+              sublabel="View consultation requests"
+              onPress={() => router.push("/inbox")}
+              />
+            </View>
+          </View>
+          )}
+          
           {/* Admin section — PCP only */}
           {user?.role === "PCP" && (
             <View style={styles.menuGroup}>

@@ -19,6 +19,8 @@ import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
 import type { AnalyzeMatch } from "@/types/api";
 import { displayRole } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
+// === NEW: added Modal and TextInput ===
+import { Modal, TextInput } from "react-native";
 
 export default function Compare() {
   const authorized = useRequireRole("PCP");
@@ -34,6 +36,11 @@ export default function Compare() {
   const [matches, setMatches] = useState<AnalyzeMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // === NEW: modal visibility state ===
+  const [showConsultModal, setShowConsultModal] = useState(false);
+  const [selectedPCP, setSelectedPCP] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [sentConsult, setSentConsult] = useState<any>(null);
 
   const patientLabel = patientName || patientMrn || (patientId ? `ID # ${patientId}` : "—");
 
@@ -157,8 +164,163 @@ export default function Compare() {
             </View>
             )}
           </View>
+          {/* === NEW: Second opinion button === */}
+          <View style={{ marginTop: 20 }}>
+            <Pressable
+            onPress={() => {
+              setSelectedPCP(null);
+              setMessage("");
+              setShowConsultModal(true);
+            }}
+            style={{
+              backgroundColor: D.primary,
+              padding: 14,
+              borderRadius: 10,
+              alignItems: "center",
+            }}
+            >
+              <Text style={{ color: "white", fontWeight: "700" }}>
+                Request Second Opinion
+                </Text>
+                </Pressable>
+           </View>
         </View>
       </ScrollView>
+      {/* === NEW: Consultation modal === */}
+<Modal visible={showConsultModal} transparent animationType="slide">
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "center",
+      padding: 20,
+    }}
+  >
+    <View
+      style={{
+        backgroundColor: "white",
+        borderRadius: 16,
+        padding: 20,
+      }}
+    >
+      <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 12 }}>
+        Request Second Opinion
+      </Text>
+      <Text style={{ marginBottom: 8 }}>Select PCP</Text>
+
+{[
+  { email: "dr.quach@hospital.com", name: "Dr. Quach" },
+  { email: "dr.patel@hospital.com", name: "Dr. Patel" },
+  { email: "dr.chen@hospital.com", name: "Dr. Chen" },
+].map((p) => (
+  <Pressable
+    key={p.email}
+    onPress={() => setSelectedPCP(p.email)}
+    style={{
+      padding: 10,
+      borderRadius: 8,
+      marginBottom: 8,
+      backgroundColor:
+        selectedPCP === p.email ? D.primary : "#eee",
+    }}
+  >
+    <Text
+      style={{
+        color: selectedPCP === p.email ? "white" : "black",
+        fontWeight: "600",
+      }}
+    >
+      {p.name}
+    </Text>
+  </Pressable>
+))}
+
+        {imageUri && (
+          <View style={{ marginBottom: 10 }}>
+            <Text style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>
+              Attached Image
+            </Text>
+            <Image
+              source={{ uri: imageUri }}
+              style={{
+                width: "50%",
+                aspectRatio: 1.5,
+                maxHeight: 400,
+                borderRadius: 8,
+              }}
+                contentFit="cover"
+            />
+          </View>
+        )}
+      <Text style={{ marginBottom: 4 }}>Message</Text>
+      <TextInput
+      placeholder="Add message..."
+      multiline
+      value={message}
+      onChangeText={setMessage}
+      style={{
+        borderWidth: 1,
+        borderColor: "#ccc",
+        borderRadius: 8,
+        padding: 10,
+        height: 80,
+        }}
+      />
+
+      <View style={{ flexDirection: "row", marginTop: 16, gap: 10 }}>
+        <Pressable
+          onPress={() => setShowConsultModal(false)}
+          style={{
+            flex: 1,
+            padding: 12,
+            backgroundColor: "#ddd",
+            borderRadius: 8,
+            alignItems: "center",
+          }}
+        >
+          <Text>Cancel</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => {
+            if (!selectedPCP) {
+              alert("Please select a PCP");
+              return;
+            }
+            const consultPayload = {
+              from: user?.fullName,
+              to: selectedPCP,
+              message,
+              queryId,
+              image: imageUri,
+              matches,
+            }
+
+            setSentConsult(consultPayload);
+            
+            alert(`Second opinion request sent to ${selectedPCP}`);
+
+            setMessage("");
+            setSelectedPCP(null);
+            setShowConsultModal(false);
+
+          }}
+          style={{
+            flex: 1,
+            padding: 12,
+            backgroundColor: D.primary,
+            borderRadius: 8,
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: "white", fontWeight: "600" }}>
+            Send
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  </View>
+</Modal>
     </SafeAreaView>
   );
 }
