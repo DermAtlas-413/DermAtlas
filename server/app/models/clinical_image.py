@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
+from pgvector.sqlalchemy import Vector
 
 from app.db.base import Base
 
@@ -34,4 +36,7 @@ class ClinicalImage(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
+    )
+    embedding_vector: Mapped[Optional[list[float]]] = mapped_column(
+        Vector(1408), nullable=True
     )
