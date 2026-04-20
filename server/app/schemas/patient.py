@@ -15,6 +15,14 @@ class ClinicalImageSummary(BaseModel):
 class PatientResponse(BaseModel):
     patient_id: int
     mrn_internal: str
+    full_name: str
     date_of_birth: str
     gender: str
+    clinical_images: List[ClinicalImageSummary]
+
+
+class PatientMeResponse(BaseModel):
+    user_id: int
+    full_name: str
+    email: str
     clinical_images: List[ClinicalImageSummary]

@@ -46,3 +46,10 @@ async def require_pcp(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != UserRole.PCP:
         raise HTTPException(status_code=403, detail="PCP access required")
     return current_user
+
+
+async def require_network_admin(current_user: User = Depends(require_pcp)) -> User:
+    """Dependency that enforces network-admin privileges (PCP + is_admin)."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+    return current_user

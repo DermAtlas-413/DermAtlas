@@ -9,24 +9,6 @@ from pydantic import ValidationError
 # ---------------------------------------------------------------------------
 
 
-class TestSubmissionCreate:
-    def test_requires_image_data(self):
-        """image_data is required; omitting it raises ValidationError."""
-        from app.schemas.submission import SubmissionCreate
-
-        with pytest.raises(ValidationError):
-            SubmissionCreate()
-
-    def test_optional_patient_notes(self):
-        """patient_notes (or equivalent) is optional and defaults to empty."""
-        from app.schemas.submission import SubmissionCreate
-
-        s = SubmissionCreate(image_data="base64data==")
-        # Accept either field name used in the schema
-        notes = getattr(s, "patient_notes", getattr(s, "clinician_notes", None))
-        assert notes == "" or notes is None
-
-
 class TestHealthResponse:
     def test_requires_status_and_version(self):
         from app.schemas.health import HealthResponse

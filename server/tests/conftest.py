@@ -143,13 +143,37 @@ def _create_token(user_id: int, role: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# User fixtures
+# Network + user fixtures
 # ---------------------------------------------------------------------------
 
 
 @pytest_asyncio.fixture
-async def pcp_user(db_session: AsyncSession):
-    """Insert a PCP user and return the ORM instance."""
+async def default_network(db_session: AsyncSession):
+    """The primary test Network that pcp_user / patient_user belong to."""
+    from app.models.network import Network
+
+    net = Network(name="Test Hospital", slug="test-hospital")
+    db_session.add(net)
+    await db_session.flush()
+    await db_session.refresh(net)
+    return net
+
+
+@pytest_asyncio.fixture
+async def other_network(db_session: AsyncSession):
+    """A second Network used to validate cross-network isolation."""
+    from app.models.network import Network
+
+    net = Network(name="Other Hospital", slug="other-hospital")
+    db_session.add(net)
+    await db_session.flush()
+    await db_session.refresh(net)
+    return net
+
+
+@pytest_asyncio.fixture
+async def pcp_user(db_session: AsyncSession, default_network):
+    """Insert a PCP user (network admin) and return the ORM instance."""
     from app.models.user import User, UserRole
 
     user = User(
@@ -158,6 +182,8 @@ async def pcp_user(db_session: AsyncSession):
         full_name=PCP_FULL_NAME,
         role=UserRole.PCP,
         npi_number=PCP_NPI,
+        network_id=default_network.network_id,
+        is_admin=True,
     )
     db_session.add(user)
     await db_session.flush()
@@ -166,7 +192,7 @@ async def pcp_user(db_session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def patient_user(db_session: AsyncSession):
+async def patient_user(db_session: AsyncSession, default_network):
     """Insert a PATIENT user and return the ORM instance."""
     from app.models.user import User, UserRole
 
@@ -176,6 +202,7 @@ async def patient_user(db_session: AsyncSession):
         full_name=PATIENT_FULL_NAME,
         role=UserRole.PATIENT,
         npi_number=None,
+        network_id=default_network.network_id,
     )
     db_session.add(user)
     await db_session.flush()
@@ -184,8 +211,8 @@ async def patient_user(db_session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def other_pcp_user(db_session: AsyncSession):
-    """A second PCP user unrelated to the patient_record fixture."""
+async def other_pcp_user(db_session: AsyncSession, default_network):
+    """A second PCP user in the same network as pcp_user (non-admin)."""
     from app.models.user import User, UserRole
 
     user = User(
@@ -194,6 +221,8 @@ async def other_pcp_user(db_session: AsyncSession):
         full_name=OTHER_PCP_FULL_NAME,
         role=UserRole.PCP,
         npi_number=OTHER_PCP_NPI,
+        network_id=default_network.network_id,
+        is_admin=False,
     )
     db_session.add(user)
     await db_session.flush()

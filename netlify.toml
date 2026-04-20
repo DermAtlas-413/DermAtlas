@@ -1,0 +1,24 @@
+[build]
+  base    = "client"
+  command = "npm ci && npx expo export --platform web"
+  publish = "dist"
+
+# Production context: deploys from the production branch (main)
+[context.production.environment]
+  APP_ENV = "production"
+
+# Branch deploy context: used for staging branch
+[context.branch-deploy.environment]
+  APP_ENV = "staging"
+
+# Deploy previews (PRs) run as development — mocks allowed for review
+[context.deploy-preview.environment]
+  APP_ENV = "development"
+
+# API_BASE and USE_MOCK are set in the Netlify dashboard per-context.
+# See DEPLOYMENT.md for exact values per deployment type.
+
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200

@@ -6,13 +6,143 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { getUser, clearAuth } from "../lib/api";
+import { useAuthStore } from "@/state/auth-store";
+import { displayRole } from "@/types/api";
+import { DermAtlasColors as D } from "@/constants/theme";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+
+export default function Profile() {
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+
+  const displayName = user?.fullName ?? "—";
+  const displayUsername = user?.email ?? "—";
+  const roleLabel = displayRole(user?.role);
+
+  const initials =
+    displayName !== "—"
+      ? displayName
+          .split(" ")
+          .map((w: string) => w[0])
+          .slice(0, 2)
+          .join("")
+          .toUpperCase()
+      : "?";
+
+  function handleLogout() {
+    clearAuth();
+    router.replace("/");
+  }
+
+  function handleChangePassword() {
+    router.push("/change-password");
+  }
+
+  function handleManageUsers() {
+    router.push("/admin/users");
+  }
+
+  function handleAuditLogs() {
+    router.push("/admin/audit-logs");
+  }
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable style={styles.headerBtn} onPress={() => router.back()}>
+          <MaterialCommunityIcons name="arrow-left" size={22} color={D.onPrimary} />
+        </Pressable>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Profile</Text>
+          <Text style={styles.headerSubtitle}>
+            {user?.fullName ?? "—"} · {roleLabel}
+          </Text>
+        </View>
+        <Pressable style={styles.headerBtnAlt} onPress={handleLogout}>
+          <Text style={styles.headerBtnAltText}>Logout</Text>
+        </Pressable>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={styles.page}>
+          {/* Profile card */}
+          <View style={styles.profileCard}>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarInitials}>{initials}</Text>
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{displayName}</Text>
+              <View style={styles.profileBadges}>
+                <View style={styles.badge}>
+                  <MaterialCommunityIcons
+                    name="briefcase-outline"
+                    size={11}
+                    color={D.primary}
+                  />
+                  <Text style={styles.badgeText}>{roleLabel}</Text>
+                </View>
+              </View>
+              <Text style={styles.profileUsername}>{displayUsername}</Text>
+            </View>
+          </View>
+
+          {/* Account section */}
+          <View style={styles.menuGroup}>
+            <SectionHeader title="Account" />
+            <View style={styles.menuCard}>
+              <MenuRow
+                icon="lock-outline"
+                label="Change Password"
+                sublabel="Update your login credentials"
+                onPress={handleChangePassword}
+              />
+            </View>
+          </View>
+
+          {/* Admin section — network admins only */}
+          {user?.role === "PCP" && user?.isAdmin && (
+            <View style={styles.menuGroup}>
+              <SectionHeader title="Administrator Controls" />
+              <View style={styles.menuCard}>
+                <MenuRow
+                  icon="account-group-outline"
+                  label="Manage Users"
+                  sublabel="Add, remove, or edit user accounts"
+                  onPress={handleManageUsers}
+                />
+                <View style={styles.menuDivider} />
+                <MenuRow
+                  icon="clipboard-list-outline"
+                  label="View Audit Logs"
+                  sublabel="Review system activity and access history"
+                  onPress={handleAuditLogs}
+                />
+              </View>
+            </View>
+          )}
+
+          {/* Sign out */}
+          <View style={styles.menuGroup}>
+            <View style={styles.menuCard}>
+              <MenuRow
+                icon="logout"
+                label="Sign Out"
+                onPress={handleLogout}
+                danger
+              />
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
 
 function MenuRow({
   icon,
@@ -44,7 +174,7 @@ function MenuRow({
         <MaterialCommunityIcons
           name={icon}
           size={20}
-          color={danger ? "#E63946" : D.primary}
+          color={danger ? D.danger : D.primary}
         />
       </View>
       <View style={styles.menuTextWrap}>
@@ -58,7 +188,7 @@ function MenuRow({
       <MaterialCommunityIcons
         name="chevron-right"
         size={20}
-        color={danger ? "#E63946" : D.muted}
+        color={danger ? D.danger : D.muted}
       />
     </Pressable>
   );
@@ -71,151 +201,6 @@ function SectionHeader({ title }: { title: string }) {
     </View>
   );
 }
-
-export default function Profile() {
-  const router = useRouter();
-  const user = getUser();
-
-  const displayName = user?.fullName ?? "—";
-  const displayUsername = user?.email ?? "—";
-  const displayRole =
-    user?.role === "PCP" ? "PCP, Admin" : user?.role ?? "—";
-
-  const initials =
-    displayName !== "—"
-      ? displayName
-          .split(" ")
-          .map((w: string) => w[0])
-          .slice(0, 2)
-          .join("")
-          .toUpperCase()
-      : "?";
-
-  function handleLogout() {
-    clearAuth();
-    router.replace("/");
-  }
-
-  function handleChangePassword() {
-    Alert.alert(
-      "Change Password",
-      "Password reset is not yet available in this version."
-    );
-  }
-
-  function handleManageUsers() {
-    Alert.alert(
-      "Manage Users",
-      "User management is not yet available in this version."
-    );
-  }
-
-  function handleAuditLogs() {
-    Alert.alert(
-      "View Audit Logs",
-      "Audit log viewer is not yet available in this version."
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.safe}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable style={styles.headerBtn} onPress={() => router.back()}>
-          <MaterialCommunityIcons name="arrow-left" size={22} color="#fff" />
-        </Pressable>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Profile</Text>
-          <Text style={styles.headerSubtitle}>
-            {user?.fullName ?? "—"} · {user?.role ?? "—"}
-          </Text>
-        </View>
-        <Pressable style={styles.headerBtnAlt} onPress={handleLogout}>
-          <Text style={styles.headerBtnAltText}>Logout</Text>
-        </Pressable>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.page}>
-          {/* Profile card */}
-          <View style={styles.profileCard}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitials}>{initials}</Text>
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{displayName}</Text>
-              <View style={styles.profileBadges}>
-                <View style={styles.badge}>
-                  <MaterialCommunityIcons
-                    name="briefcase-outline"
-                    size={11}
-                    color={D.primary}
-                  />
-                  <Text style={styles.badgeText}>{displayRole}</Text>
-                </View>
-              </View>
-              <Text style={styles.profileUsername}>{displayUsername}</Text>
-            </View>
-          </View>
-
-          {/* Account section */}
-          <View style={styles.menuGroup}>
-            <SectionHeader title="Account" />
-            <View style={styles.menuCard}>
-              <MenuRow
-                icon="lock-outline"
-                label="Change Password"
-                sublabel="Update your login credentials"
-                onPress={handleChangePassword}
-              />
-            </View>
-          </View>
-
-          {/* Admin section */}
-          <View style={styles.menuGroup}>
-            <SectionHeader title="Administrator Controls" />
-            <View style={styles.menuCard}>
-              <MenuRow
-                icon="account-group-outline"
-                label="Manage Users"
-                sublabel="Add, remove, or edit user accounts"
-                onPress={handleManageUsers}
-              />
-              <View style={styles.menuDivider} />
-              <MenuRow
-                icon="clipboard-list-outline"
-                label="View Audit Logs"
-                sublabel="Review system activity and access history"
-                onPress={handleAuditLogs}
-              />
-            </View>
-          </View>
-
-          {/* Sign out */}
-          <View style={styles.menuGroup}>
-            <View style={styles.menuCard}>
-              <MenuRow
-                icon="logout"
-                label="Sign Out"
-                onPress={handleLogout}
-                danger
-              />
-            </View>
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-const D = {
-  primary: "#0D6E8A",
-  bg: "#EEF6FA",
-  surface: "#FFFFFF",
-  border: "#B8D9E8",
-  text: "#1A3340",
-  muted: "#7A9EB0",
-};
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: D.bg },
@@ -232,20 +217,20 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: D.onPrimaryOverlay,
     alignItems: "center",
     justifyContent: "center",
   },
   headerCenter: { flex: 1, alignItems: "center" },
-  headerTitle: { color: "#fff", fontWeight: "700", fontSize: 17 },
-  headerSubtitle: { color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: "500" },
+  headerTitle: { color: D.onPrimary, fontWeight: "700", fontSize: 17 },
+  headerSubtitle: { color: D.onPrimaryMuted, fontSize: 11, fontWeight: "500" },
   headerBtnAlt: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: D.onPrimaryOverlay,
   },
-  headerBtnAltText: { color: "#fff", fontWeight: "600", fontSize: 13 },
+  headerBtnAltText: { color: D.onPrimary, fontWeight: "600", fontSize: 13 },
 
   scroll: { flexGrow: 1 },
   page: {
@@ -274,7 +259,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarInitials: { color: "#fff", fontWeight: "800", fontSize: 24 },
+  avatarInitials: { color: D.onPrimary, fontWeight: "800", fontSize: 24 },
   profileInfo: { flex: 1, gap: 4 },
   profileName: { color: D.text, fontSize: 17, fontWeight: "700" },
   profileBadges: { flexDirection: "row", gap: 6 },
@@ -321,14 +306,14 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: "#E0F0F7",
+    backgroundColor: D.infoSurface,
     alignItems: "center",
     justifyContent: "center",
   },
-  menuIconWrapDanger: { backgroundColor: "#FEE2E4" },
+  menuIconWrapDanger: { backgroundColor: D.dangerBg },
   menuTextWrap: { flex: 1, gap: 2 },
   menuLabel: { color: D.text, fontWeight: "600", fontSize: 15 },
-  menuLabelDanger: { color: "#E63946" },
+  menuLabelDanger: { color: D.danger },
   menuSublabel: { color: D.muted, fontSize: 12 },
   menuDivider: { height: 1, backgroundColor: D.border, marginLeft: 68 },
 });

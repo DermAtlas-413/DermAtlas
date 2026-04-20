@@ -13,12 +13,30 @@ import {
   ScrollView,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { setToken, setUser } from "../lib/api";
+import { login } from "@/services/auth-service";
+import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Index() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin() {
+    setError(null);
+    setLoading(true);
+    try {
+      const { user } = await login(username, password);
+      router.replace(user.role === "PATIENT" ? "/my-cases" : "/upload");
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error ? e.message : "Login failed. Please try again.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -105,33 +123,49 @@ export default function Index() {
                   </View>
                 </View>
 
+                {error ? (
+                  <View style={styles.errorBanner}>
+                    <MaterialCommunityIcons
+                      name="alert-circle-outline"
+                      size={16}
+                      color={D.danger}
+                    />
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
+
                 <Pressable
                   style={({ pressed }) => [
                     styles.button,
-                    pressed && styles.buttonPressed,
+                    loading && styles.buttonDisabled,
+                    pressed && !loading && styles.buttonPressed,
                   ]}
-                  onPress={() => {
-                    // Mock auth — swap for real login call when USE_MOCK = false
-                    setToken("mock-token");
-                    setUser({
-                      userId: "1",
-                      email: username || "clinician@hospital.com",
-                      fullName: username ? `Dr. ${username}` : "Dr. Quach",
-                      role: "PCP",
-                    });
-                    router.replace("/upload");
-                  }}
+                  onPress={handleLogin}
+                  disabled={loading}
                 >
-                  <Text style={styles.buttonText}>Sign In</Text>
-                  <MaterialCommunityIcons
-                    name="arrow-right"
-                    size={20}
-                    color="#fff"
-                  />
+                  <Text style={styles.buttonText}>
+                    {loading ? "Signing In…" : "Sign In"}
+                  </Text>
+                  {!loading ? (
+                    <MaterialCommunityIcons
+                      name="arrow-right"
+                      size={20}
+                      color={D.onPrimary}
+                    />
+                  ) : null}
                 </Pressable>
 
                 <Pressable onPress={() => {}} style={styles.forgotWrap}>
                   <Text style={styles.forgotText}>Forgot Password?</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => router.push("/register" as never)}
+                  style={styles.forgotWrap}
+                >
+                  <Text style={styles.forgotText}>
+                    Register a new hospital
+                  </Text>
                 </Pressable>
               </View>
 
@@ -153,15 +187,6 @@ export default function Index() {
   );
 }
 
-const D = {
-  primary: "#0D6E8A",
-  bg: "#EEF6FA",
-  surface: "#FFFFFF",
-  border: "#B8D9E8",
-  text: "#1A3340",
-  muted: "#7A9EB0",
-};
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: D.bg },
   scroll: { flexGrow: 1 },
@@ -178,7 +203,7 @@ const styles = StyleSheet.create({
     padding: 28,
     width: "100%",
     maxWidth: 440,
-    shadowColor: "#0D6E8A",
+    shadowColor: D.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -248,7 +273,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   buttonPressed: { opacity: 0.85 },
-  buttonText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
+  buttonDisabled: { opacity: 0.6 },
+  buttonText: { color: D.onPrimary, fontSize: 16, fontWeight: "700" },
+
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: D.dangerBg,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: D.danger,
+  },
+  errorText: { color: D.danger, fontSize: 13, fontWeight: "600", flex: 1 },
 
   forgotWrap: { alignItems: "center" },
   forgotText: { color: D.primary, fontSize: 13, fontWeight: "600" },
