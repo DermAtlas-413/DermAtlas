@@ -22,16 +22,16 @@ export function useProtectedRoute() {
   const [navReady, setNavReady] = useState(false);
 
   useEffect(() => {
-    if (navRef?.isReady) {
+    if (navRef?.isReady?.()) {
       setNavReady(true);
       return;
     }
     // Listen for when navigation becomes ready
     const unsubscribe = navRef?.addListener?.("state", () => {
-      if (navRef.isReady) setNavReady(true);
+      if (navRef.isReady?.()) setNavReady(true);
     });
     return () => { unsubscribe?.(); };
-  }, [navRef, navRef?.isReady]);
+  }, [navRef]);
 
   useEffect(() => {
     if (!hydrated || !navReady) return;

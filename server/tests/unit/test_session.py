@@ -45,7 +45,7 @@ def test_build_direct_engine_reflects_debug_flag():
 # ---------------------------------------------------------------------------
 
 
-def test_init_db_engine_sets_module_globals_direct(mocker):
+async def test_init_db_engine_sets_module_globals_direct(mocker):
     """init_db_engine (direct-connection path) must set engine and AsyncSessionLocal."""
     import app.db.session as session_module
 
@@ -60,7 +60,7 @@ def test_init_db_engine_sets_module_globals_direct(mocker):
     original_factory = session_module.AsyncSessionLocal
 
     try:
-        session_module.init_db_engine()
+        await session_module.init_db_engine()
         assert session_module.engine is mock_engine
         assert session_module.AsyncSessionLocal is not None
     finally:

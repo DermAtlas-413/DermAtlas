@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_MAX_RESULTS = 10
+_TOP_PER_CATEGORY = 5
+_VERTEX_NEIGHBORS = 25
 _gcs_client: gcs_storage.Client | None = None
 _signing_creds = None
 
@@ -92,7 +93,7 @@ async def analyze_lesion(
     # --- Generate embedding from the uploaded image ---
     try:
         embedding = _get_image_embedding(image.gcs_image_uri)
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to generate image embedding for %s", image.gcs_image_uri)
         raise HTTPException(status_code=503, detail="Image embedding service unavailable")
 
@@ -105,16 +106,15 @@ async def analyze_lesion(
         response = endpoint.find_neighbors(
             deployed_index_id="dermatlas_index_v2",
             queries=[embedding],
-            num_neighbors=_MAX_RESULTS,
+            num_neighbors=_VERTEX_NEIGHBORS,
         )
         neighbors = response[0] if response else []
-    except Exception as exc:
+    except Exception:
         logger.exception("Vertex AI vector search failed")
         raise HTTPException(status_code=503, detail="Vector search service unavailable")
 
-    # --- Cap results and enrich with atlas metadata ---
-    neighbors = neighbors[:_MAX_RESULTS]
-    results: list[AnalysisResult] = []
+    # --- Enrich with atlas metadata, preserving Vertex's score ordering ---
+    enriched: list[AnalysisResult] = []
     for n in neighbors:
         ref_result = await db.execute(
             select(ReferenceAtlas).where(ReferenceAtlas.reference_id == n.id)
@@ -129,14 +129,28 @@ async def analyze_lesion(
             except Exception:
                 logger.warning("Failed to sign URL for %s", ref.gcs_image_uri)
 
-        results.append(
+        enriched.append(
             AnalysisResult(
                 reference_id=n.id,
                 diagnosis_label=ref.diagnosis_label if ref else None,
+                diagnosis_type=ref.diagnosis_type if ref else None,
                 score=float(n.distance) if n.distance is not None else 0.0,
                 gcs_uri=image_url,
             )
         )
+
+    # --- Partition into benign / malignant (case-insensitive), then cap each list ---
+    benign_results: list[AnalysisResult] = []
+    malignant_results: list[AnalysisResult] = []
+    for r in enriched:
+        dtype = (r.diagnosis_type or "").strip().lower()
+        if dtype == "benign":
+            benign_results.append(r)
+        elif dtype == "malignant":
+            malignant_results.append(r)
+
+    benign_results = benign_results[:_TOP_PER_CATEGORY]
+    malignant_results = malignant_results[:_TOP_PER_CATEGORY]
 
     # --- Audit log ---
     db.add(
@@ -148,4 +162,7 @@ async def analyze_lesion(
     )
     await db.flush()
 
-    return AnalyzeResponse(results=results)
+    return AnalyzeResponse(
+        benign_results=benign_results,
+        malignant_results=malignant_results,
+    )

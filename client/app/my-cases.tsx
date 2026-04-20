@@ -71,6 +71,10 @@ export default function MyCases() {
     router.replace("/");
   }
 
+  function handleCasePress(queryId: string) {
+    router.push({ pathname: "/case-detail", params: { queryId } });
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       {/* Header */}
@@ -119,6 +123,12 @@ export default function MyCases() {
                 </View>
               </View>
               <Text style={styles.profileEmail}>{user?.email ?? "—"}</Text>
+              {data?.physician_name && (
+                <View style={styles.physicianRow}>
+                  <MaterialCommunityIcons name="stethoscope" size={12} color={D.muted} />
+                  <Text style={styles.physicianText}>{data.physician_name}</Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -151,50 +161,65 @@ export default function MyCases() {
                 size={48}
                 color={D.border}
               />
-              <Text style={styles.emptyTitle}>No cases submitted yet</Text>
+              <Text style={styles.emptyTitle}>No cases available yet</Text>
               <Text style={styles.emptySubtitle}>
-                Your clinician will submit images on your behalf
+                Your physician will share case results when they are ready for you to view.
               </Text>
             </View>
           )}
 
-          {/* Case list */}
-          {!loading && !error && data && data.clinical_images.map((img) => (
-            <CaseCard key={img.query_id} image={img} />
-          ))}
+          {/* Case tiles */}
+          {!loading && !error && data && (
+            <View style={styles.tileGrid}>
+              {data.clinical_images.map((img) => (
+                <CaseCard
+                  key={img.query_id}
+                  image={img}
+                  onPress={() => handleCasePress(img.query_id)}
+                />
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function CaseCard({ image }: { image: ClinicalImageSummary }) {
+function CaseCard({ image, onPress }: { image: ClinicalImageSummary; onPress: () => void }) {
   const [imgError, setImgError] = useState(false);
   const hasImage = !!image.gcs_uri && !imgError;
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.caseCard, pressed && styles.caseCardPressed]}
+      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
+      onPress={onPress}
     >
-      <View style={styles.thumbnail}>
+      <View style={styles.tileThumbnail}>
         {hasImage ? (
           <Image
             source={{ uri: image.gcs_uri }}
-            style={styles.thumbnailImage}
+            style={styles.tileThumbnailImage}
             contentFit="cover"
             onError={() => setImgError(true)}
           />
         ) : (
-          <MaterialCommunityIcons name="image-outline" size={28} color={D.border} />
+          <View style={styles.tilePlaceholder}>
+            <MaterialCommunityIcons name="image-outline" size={32} color={D.border} />
+          </View>
         )}
       </View>
-      <View style={styles.caseInfo}>
-        <Text style={styles.caseLocation}>{image.lesion_location}</Text>
-        <Text style={styles.caseMeta}>
-          {formatDate(image.captured_at)} · {image.query_id.slice(-8)}
-        </Text>
+      <View style={styles.tileBody}>
+        <View style={styles.tileLocationRow}>
+          <MaterialCommunityIcons name="map-marker-outline" size={14} color={D.primary} />
+          <Text style={styles.tileLocation} numberOfLines={1}>{image.lesion_location}</Text>
+        </View>
+        <Text style={styles.tileMeta}>{formatDate(image.captured_at)}</Text>
       </View>
-      <MaterialCommunityIcons name="chevron-right" size={20} color={D.muted} />
+      <View style={styles.tileFooter}>
+        <Text style={styles.tileAction}>View Details</Text>
+        <MaterialCommunityIcons name="chevron-right" size={16} color={D.primary} />
+      </View>
     </Pressable>
   );
 }
@@ -235,7 +260,7 @@ const styles = StyleSheet.create({
   page: {
     padding: 20,
     gap: 16,
-    maxWidth: 600,
+    maxWidth: 720,
     alignSelf: "center",
     width: "100%",
   },
@@ -275,6 +300,13 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: D.primary, fontSize: 11, fontWeight: "600" },
   profileEmail: { color: D.muted, fontSize: 12, fontWeight: "500" },
+  physicianRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  physicianText: { color: D.muted, fontSize: 12, fontWeight: "500" },
 
   sectionLabel: {
     fontSize: 13,
@@ -303,32 +335,56 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   emptyTitle: { color: D.text, fontSize: 16, fontWeight: "600" },
-  emptySubtitle: { color: D.muted, fontSize: 13, textAlign: "center" },
+  emptySubtitle: { color: D.muted, fontSize: 13, textAlign: "center", maxWidth: 280 },
 
-  caseCard: {
+  tileGrid: {
     flexDirection: "row",
-    alignItems: "center",
+    flexWrap: "wrap",
     gap: 14,
+  },
+
+  tile: {
+    width: "100%",
+    maxWidth: 340,
+    flexGrow: 1,
+    flexBasis: "45%",
     backgroundColor: D.surface,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: D.border,
-  },
-  caseCardPressed: { opacity: 0.8 },
-  thumbnail: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
-    backgroundColor: D.bg,
-    borderWidth: 1,
-    borderColor: D.border,
-    alignItems: "center",
-    justifyContent: "center",
     overflow: "hidden",
   },
-  thumbnailImage: { width: "100%", height: "100%" },
-  caseInfo: { flex: 1, gap: 4 },
-  caseLocation: { color: D.text, fontSize: 14, fontWeight: "600" },
-  caseMeta: { color: D.muted, fontSize: 12, fontWeight: "500" },
+  tilePressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  tileThumbnail: {
+    height: 140,
+    backgroundColor: D.bg,
+    borderBottomWidth: 1,
+    borderBottomColor: D.border,
+  },
+  tileThumbnailImage: { width: "100%", height: "100%" },
+  tilePlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tileBody: {
+    padding: 14,
+    gap: 4,
+  },
+  tileLocationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  tileLocation: { color: D.text, fontSize: 15, fontWeight: "700", flex: 1 },
+  tileMeta: { color: D.muted, fontSize: 12, fontWeight: "500" },
+  tileFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    gap: 2,
+  },
+  tileAction: { color: D.primary, fontSize: 12, fontWeight: "700" },
 });

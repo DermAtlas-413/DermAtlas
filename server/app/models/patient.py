@@ -14,6 +14,9 @@ class Patient(Base):
     __tablename__ = "patients"
 
     patient_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.user_id"), nullable=True, unique=True, index=True
+    )
     primary_physician_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.user_id"), nullable=False, index=True
     )

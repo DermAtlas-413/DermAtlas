@@ -1,11 +1,16 @@
 """
 Integration tests for POST /api/v1/lesion/analyze.
 
-TDD — these will be red until the analyze endpoint, Vertex AI service,
-and audit log model are implemented.
+The analyze endpoint returns two ranked lists — `benign_results` and
+`malignant_results` — so clinicians can compare the closest benign and
+closest malignant atlas matches side-by-side, which is most informative for
+borderline lesions near the decision boundary.
 """
 
-import pytest
+from unittest.mock import MagicMock
+
+from app.models.reference_atlas import ReferenceAtlas
+
 
 ANALYZE_URL = "/api/v1/lesion/analyze"
 
@@ -14,96 +19,191 @@ def _payload(query_id: str) -> dict:
     return {"query_id": query_id}
 
 
+def _neighbor(ref_id: str, distance: float) -> MagicMock:
+    n = MagicMock()
+    n.id = ref_id
+    n.distance = distance
+    return n
+
+
+async def _seed_refs(db_session, count: int, diagnosis_type: str, id_prefix: str):
+    """Insert `count` ReferenceAtlas rows; return their IDs in insertion order."""
+    ids: list[str] = []
+    for i in range(count):
+        ref_id = f"{id_prefix}-{i:03d}"
+        ref = ReferenceAtlas(
+            reference_id=ref_id,
+            gcs_image_uri=f"gs://dermatlas-ref/atlas/{ref_id}.jpg",
+            vertex_vector_id=f"vec-{ref_id}",
+            diagnosis_label=f"Label-{i}",
+            diagnosis_type=diagnosis_type,
+            modality="dermoscopy",
+            body_part="skin",
+            source_dataset="ISIC",
+        )
+        db_session.add(ref)
+        ids.append(ref_id)
+    await db_session.flush()
+    return ids
+
+
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------
 
 
-async def test_analyze_returns_200_with_results(
+async def test_analyze_returns_benign_and_malignant_lists(
     client, pcp_token, clinical_image, reference_image, mock_vertex
 ):
-    """POST with a valid query_id returns 200 and a results list."""
-    # Configure mock to return one neighbour
-    from unittest.mock import MagicMock
-
-    neighbour = MagicMock()
-    neighbour.id = str(reference_image.reference_id)
-    neighbour.distance = 0.95
-    mock_vertex.return_value.find_neighbors.return_value = [[neighbour]]
-
+    """Response body must contain both benign_results and malignant_results lists."""
+    mock_vertex.return_value.find_neighbors.return_value = [
+        [_neighbor(str(reference_image.reference_id), 0.9)]
+    ]
     response = await client.post(
-        ANALYZE_URL,
-        json=_payload(str(clinical_image.query_id)),
-        headers=pcp_token,
+        ANALYZE_URL, json=_payload(str(clinical_image.query_id)), headers=pcp_token
     )
     assert response.status_code == 200
     body = response.json()
-    assert "results" in body
-    assert isinstance(body["results"], list)
+    assert "benign_results" in body
+    assert "malignant_results" in body
+    assert isinstance(body["benign_results"], list)
+    assert isinstance(body["malignant_results"], list)
 
 
-async def test_analyze_result_contains_reference_id_label_score_uri(
+async def test_analyze_result_contains_all_required_fields(
     client, pcp_token, clinical_image, reference_image, mock_vertex
 ):
-    """Each result item must have reference_id, diagnosis_label, score, gcs_uri."""
-    from unittest.mock import MagicMock
-
-    neighbour = MagicMock()
-    neighbour.id = str(reference_image.reference_id)
-    neighbour.distance = 0.9
-    mock_vertex.return_value.find_neighbors.return_value = [[neighbour]]
-
+    """Each result item must expose reference_id, diagnosis_label, diagnosis_type, score, gcs_uri."""
+    mock_vertex.return_value.find_neighbors.return_value = [
+        [_neighbor(str(reference_image.reference_id), 0.9)]
+    ]
     response = await client.post(
-        ANALYZE_URL,
-        json=_payload(str(clinical_image.query_id)),
-        headers=pcp_token,
+        ANALYZE_URL, json=_payload(str(clinical_image.query_id)), headers=pcp_token
     )
     assert response.status_code == 200
-    results = response.json()["results"]
-    assert len(results) >= 1
-    item = results[0]
+    body = response.json()
+    # reference_image is Malignant by default
+    assert len(body["malignant_results"]) == 1
+    item = body["malignant_results"][0]
     assert "reference_id" in item
     assert "diagnosis_label" in item
+    assert "diagnosis_type" in item
     assert "score" in item
     assert "gcs_uri" in item
 
 
-async def test_analyze_returns_at_most_10_results(
-    client, pcp_token, clinical_image, mock_vertex
+async def test_analyze_benign_list_only_contains_benign(
+    client, pcp_token, clinical_image, db_session, mock_vertex
 ):
-    """Even if Vertex returns more, the endpoint caps results at 10."""
-    from unittest.mock import MagicMock
+    """Mixing benign and malignant neighbours must partition them into the correct lists."""
+    benign_ids = await _seed_refs(db_session, 3, "Benign", "ben")
+    malig_ids = await _seed_refs(db_session, 3, "Malignant", "mal")
 
     neighbours = []
-    for i in range(15):
-        n = MagicMock()
-        n.id = str(i + 1000)
-        n.distance = 0.9 - i * 0.01
-        neighbours.append(n)
+    for i, rid in enumerate(benign_ids):
+        neighbours.append(_neighbor(rid, 0.95 - i * 0.01))
+    for i, rid in enumerate(malig_ids):
+        neighbours.append(_neighbor(rid, 0.85 - i * 0.01))
     mock_vertex.return_value.find_neighbors.return_value = [neighbours]
 
     response = await client.post(
-        ANALYZE_URL,
-        json=_payload(str(clinical_image.query_id)),
-        headers=pcp_token,
+        ANALYZE_URL, json=_payload(str(clinical_image.query_id)), headers=pcp_token
     )
     assert response.status_code == 200
-    assert len(response.json()["results"]) == 10
+    body = response.json()
+    assert all(r["diagnosis_type"] == "Benign" for r in body["benign_results"])
+    assert all(r["diagnosis_type"] == "Malignant" for r in body["malignant_results"])
+    assert len(body["benign_results"]) == 3
+    assert len(body["malignant_results"]) == 3
 
 
-async def test_analyze_empty_vector_results_returns_empty_list(
-    client, pcp_token, clinical_image, mock_vertex
+async def test_analyze_each_list_capped_at_five(
+    client, pcp_token, clinical_image, db_session, mock_vertex
 ):
-    """When Vertex returns no neighbours, results must be an empty list (not an error)."""
-    mock_vertex.return_value.find_neighbors.return_value = [[]]
+    """Both lists must be truncated to 5 even when many candidates of each type exist."""
+    benign_ids = await _seed_refs(db_session, 12, "Benign", "ben")
+    malig_ids = await _seed_refs(db_session, 12, "Malignant", "mal")
+
+    neighbours = []
+    # Interleave so that without truncation both sides would exceed 5.
+    for i in range(12):
+        neighbours.append(_neighbor(benign_ids[i], 0.99 - i * 0.01))
+        neighbours.append(_neighbor(malig_ids[i], 0.98 - i * 0.01))
+    mock_vertex.return_value.find_neighbors.return_value = [neighbours]
 
     response = await client.post(
-        ANALYZE_URL,
-        json=_payload(str(clinical_image.query_id)),
-        headers=pcp_token,
+        ANALYZE_URL, json=_payload(str(clinical_image.query_id)), headers=pcp_token
     )
     assert response.status_code == 200
-    assert response.json()["results"] == []
+    body = response.json()
+    assert len(body["benign_results"]) == 5
+    assert len(body["malignant_results"]) == 5
+
+
+async def test_analyze_each_list_sorted_by_score_desc(
+    client, pcp_token, clinical_image, db_session, mock_vertex
+):
+    """Within each list, entries must be ordered by score descending."""
+    benign_ids = await _seed_refs(db_session, 3, "Benign", "ben")
+
+    # Feed Vertex neighbours in non-monotonic order; endpoint should preserve
+    # the Vertex ranking (which find_neighbors already returns sorted).
+    neighbours = [
+        _neighbor(benign_ids[0], 0.91),
+        _neighbor(benign_ids[1], 0.83),
+        _neighbor(benign_ids[2], 0.75),
+    ]
+    mock_vertex.return_value.find_neighbors.return_value = [neighbours]
+
+    response = await client.post(
+        ANALYZE_URL, json=_payload(str(clinical_image.query_id)), headers=pcp_token
+    )
+    assert response.status_code == 200
+    scores = [r["score"] for r in response.json()["benign_results"]]
+    assert scores == sorted(scores, reverse=True)
+
+
+async def test_analyze_empty_vector_returns_two_empty_lists(
+    client, pcp_token, clinical_image, mock_vertex
+):
+    """No Vertex neighbours → both lists empty, still 200."""
+    mock_vertex.return_value.find_neighbors.return_value = [[]]
+    response = await client.post(
+        ANALYZE_URL, json=_payload(str(clinical_image.query_id)), headers=pcp_token
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["benign_results"] == []
+    assert body["malignant_results"] == []
+
+
+async def test_analyze_one_sided_benign_returns_empty_malignant(
+    client, pcp_token, clinical_image, db_session, mock_vertex
+):
+    """If all neighbours are benign, malignant_results must be empty (not padded)."""
+    benign_ids = await _seed_refs(db_session, 4, "Benign", "ben")
+    neighbours = [_neighbor(rid, 0.9 - i * 0.01) for i, rid in enumerate(benign_ids)]
+    mock_vertex.return_value.find_neighbors.return_value = [neighbours]
+
+    response = await client.post(
+        ANALYZE_URL, json=_payload(str(clinical_image.query_id)), headers=pcp_token
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["benign_results"]) == 4
+    assert body["malignant_results"] == []
+
+
+async def test_analyze_requests_25_neighbors_from_vertex(
+    client, pcp_token, clinical_image, mock_vertex
+):
+    """Endpoint must request 25 neighbours from Vertex to have headroom for partitioning."""
+    mock_vertex.return_value.find_neighbors.return_value = [[]]
+    await client.post(
+        ANALYZE_URL, json=_payload(str(clinical_image.query_id)), headers=pcp_token
+    )
+    call = mock_vertex.return_value.find_neighbors.call_args
+    assert call.kwargs.get("num_neighbors") == 25
 
 
 # ---------------------------------------------------------------------------

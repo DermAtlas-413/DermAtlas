@@ -2,6 +2,7 @@
 
 from app.models.audit_log import AuditLog
 from app.models.clinical_image import ClinicalImage
+from app.models.clinical_image_prediction import ClinicalImagePrediction
 from app.models.network import Network
 from app.models.patient import Patient
 from app.models.recommendation_feedback import RecommendationFeedback
@@ -14,6 +15,7 @@ __all__ = [
     "Network",
     "Patient",
     "ClinicalImage",
+    "ClinicalImagePrediction",
     "ReferenceAtlas",
     "RecommendationFeedback",
     "AuditLog",
