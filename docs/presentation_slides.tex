@@ -78,9 +78,131 @@
 \end{frame}
 
 % ═════════════════════════════════════════════════════════════════════════════
+% SLIDE A — The Problem
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 1 --- The Problem: A Critical Gap in Dermatologic Care}
+
+  \begin{columns}[T]
+
+    \begin{column}{0.48\textwidth}
+      \begin{alertblock}{Survival Rates Drop Dramatically}
+        \small
+        Skin cancer caught in \textbf{early stages} has a survival
+        rate of nearly \textbf{100\%}. By advanced stages, that
+        number falls to around \textbf{30\%}. Early diagnosis is
+        not a convenience --- it is the difference between life
+        and death.
+      \end{alertblock}
+
+      \vspace{0.4em}
+      \begin{alertblock}{Supply Cannot Meet Demand}
+        \small
+        Tens of millions of dermatology-related visits occur each
+        year, but the number of dermatologists is severely limited.
+        The result: \textbf{wait times of over a month} for a
+        specialist appointment --- far too long when a lesion
+        may be malignant.
+      \end{alertblock}
+    \end{column}
+
+    \begin{column}{0.48\textwidth}
+      \begin{block}{The Uncertainty Gap}
+        \small
+        Primary care physicians handle the majority of initial
+        skin evaluations. But dermatologic diagnosis is
+        \textbf{highly visual and pattern-based} --- requiring
+        specialized expertise most PCPs simply do not have.
+        This creates a critical uncertainty gap:
+        \begin{itemize}[leftmargin=1em, itemsep=2pt]
+          \item Delayed diagnoses
+          \item Unnecessary referrals
+          \item Strained healthcare resources
+          \item Loss of the early-stage treatment window
+        \end{itemize}
+      \end{block}
+
+      \vspace{0.4em}
+      \begin{exampleblock}{The Question}
+        \small
+        \textbf{What if this gap could be eliminated?} A solution
+        that enables instant, specialist-level triage could reduce
+        diagnostic delays to zero and empower every primary care
+        physician to make fast, accurate, and confident decisions.
+      \end{exampleblock}
+    \end{column}
+
+  \end{columns}
+
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE B — The Solution: DermAtlas
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 2 --- DermAtlas: The Solution}
+
+  \begin{columns}[T]
+
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{navyblue}What DermAtlas Is}
+
+      \vspace{0.3em}
+      {\small
+      DermAtlas is a \textbf{clinical decision support system}
+      designed to give primary care physicians instant,
+      explainable, specialist-level triage at the point of care.
+      A physician captures or uploads a lesion image; DermAtlas
+      returns a malignancy assessment alongside visually similar
+      expert-labeled historical cases --- so the physician
+      understands \textit{why}, not just \textit{what}.
+      }
+
+      \vspace{0.4em}
+      \begin{exampleblock}{Human-in-the-Loop}
+        \small
+        DermAtlas \textbf{augments} the physician --- it never
+        makes the final call. Every prediction is explainable,
+        every decision belongs to the clinician.
+      \end{exampleblock}
+    \end{column}
+
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{navyblue}System Architecture}
+
+      \vspace{0.3em}
+      \begin{block}{Backend}
+        \small
+        \begin{itemize}[leftmargin=1em, itemsep=2pt]
+          \item Cloud-hosted on \textbf{GCP} (Cloud Run, Cloud SQL,
+            Cloud Storage)
+          \item \textbf{Relational database} storing cases, metadata,
+            and physician feedback
+          \item \textbf{Role-based access control} with service-account
+            isolation --- HIPAA-aligned
+          \item ML pipeline: embedding \& classification \textbf{(built)};
+            vector search \& Bayesian update layer \textbf{(in progress)}
+        \end{itemize}
+      \end{block}
+
+      \vspace{0.3em}
+      \begin{block}{Frontend}
+        \small
+        \begin{itemize}[leftmargin=1em, itemsep=2pt]
+          \item \textbf{Cross-platform React Native} (Expo) app
+          \item Physician captures or uploads lesion image
+          \item Side-by-side display of retrieved similar cases
+          \item Malignancy score with confidence and class distribution
+        \end{itemize}
+      \end{block}
+    \end{column}
+
+  \end{columns}
+
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
 % SLIDE 1 — Data Sources
 % ═════════════════════════════════════════════════════════════════════════════
-\begin{frame}{Slide 1 — Building the Training Dataset}
+\begin{frame}{Slide 3 --- Building the Training Dataset}
 
   \begin{columns}[T]
 
@@ -105,7 +227,7 @@
       \vspace{0.3em}
       \begin{block}{ISIC 2020}
         \small 33,126 images · Multi-center\\
-        \textasciitilde6,000 labeled mel + 27,126 unknown benign
+        \textasciitilde6,000 labeled · 27,126 unknown benign
       \end{block}
 
       \vspace{0.5em}
@@ -150,9 +272,87 @@
 \end{frame}
 
 % ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 6 (moved) — Dataset Details
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 4 --- Dataset Details: Class Distribution \& Split}
+
+  \begin{columns}[T]
+
+    %% ── Left: class distribution table ─────────────────────────────────────
+    \begin{column}{0.54\textwidth}
+      \textbf{\color{navyblue}Class Distribution (30,647 labeled rows)}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} l r r r @{}}
+        \toprule
+        Class & Count & \% labeled & MLP weight \\
+        \midrule
+        {\color{teal}nv}    & 18,068 & 58.9\% & 0.249 \\
+        {\color{orange}mel} &  5,106 & 16.7\% & 0.881 \\
+        {\color{orange}bcc} &  3,323 & 10.8\% & 1.354 \\
+        {\color{teal}bkl}   &  2,847 &  9.3\% & 1.581 \\
+        {\color{orange}akiec} & 1,064 & 3.5\% & 4.231 \\
+        {\color{teal}df}    &    239 &  0.8\% & 18.85 \\
+        \midrule
+        {\color{darkred}Malignant} & 9,493 & 31.0\% & \\
+        {\color{darkgreen}Benign}  & 21,154 & 69.0\% & \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.4em}
+      {\scriptsize\color{gray}
+      Inverse class-frequency weights ($w_c \propto 1/N_c$) applied to CrossEntropyLoss.\\
+      75:1 nv:df imbalance makes weighting essential.}
+    \end{column}
+
+    %% ── Right: source breakdown + train/test split ──────────────────────────
+    \begin{column}{0.42\textwidth}
+      \textbf{\color{navyblue}Source Breakdown}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} l r r @{}}
+        \toprule
+        Dataset & Images & Labeled \\
+        \midrule
+        HAM10000  &  9,873 &  9,873 \\
+        ISIC 2019 & 14,774 & 14,774 \\
+        ISIC 2020 & 33,126 &  6,000 \\
+        \midrule
+        \textbf{Total} & \textbf{57,773} & \textbf{30,647} \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.5em}
+      \textbf{\color{navyblue}Train / Test Split}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} l r r r @{}}
+        \toprule
+        Split & Rows & Mal. & Ben. \\
+        \midrule
+        Train 75\% & 22,985 & 7,120 & 15,865 \\
+        Test  25\% &  7,662 & 2,373 &  5,289 \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.4em}
+      {\scriptsize\color{gray}
+      Stratified once, locked.\\ All downstream models respect this boundary.}
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
 % SLIDE 2 — Embedding Generation
 % ═════════════════════════════════════════════════════════════════════════════
-\begin{frame}{Slide 2 --- Turning Images into Numbers}
+\begin{frame}{Slide 5 --- Turning Images into Numbers}
 
   \begin{columns}[T]
 
@@ -221,7 +421,7 @@
 % ═════════════════════════════════════════════════════════════════════════════
 % SLIDE 3 — ML Pipeline Overview
 % ═════════════════════════════════════════════════════════════════════════════
-\begin{frame}{Slide 3 --- ML Pipeline Overview}
+\begin{frame}{Slide 6 --- ML Pipeline Overview}
 
   \vspace{0.3em}
   \begin{center}
@@ -262,9 +462,11 @@
     %% ── Vector Search: separate parallel path ───────────────────────────────
     \node[box, fill=medblue!15, draw=medblue]
           (knn) at (7.0, -3.2) {KNN / Vector Search\\{\footnotesize top-k similar cases}};
+    \node[box, fill=medblue!8, draw=medblue, dashed]
+          (ui) at (11.0, -3.2) {Physician UI\\{\footnotesize similar cases displayed}};
 
     \draw[parr] (emb.south)  to[out=-90, in=180] (knn.west);
-    \draw[parr] (knn.east)   to[out=0,   in=-90] (dec.south);
+    \draw[parr] (knn) -- (ui);
 
     %% ── Labels ──────────────────────────────────────────────────────────────
     \node[above=0.08cm of split,  font=\tiny\color{navyblue}]  {75/25 stratified};
@@ -300,7 +502,7 @@
 % ═════════════════════════════════════════════════════════════════════════════
 % SLIDE 4 — Cohort Deviation / Ugly Duckling
 % ═════════════════════════════════════════════════════════════════════════════
-\begin{frame}{Slide 4 --- Cohort Deviation: The Ugly Duckling Sign}
+\begin{frame}{Slide 7 --- Cohort Deviation: The Ugly Duckling Sign}
 
   \begin{columns}[T]
 
@@ -399,87 +601,104 @@
 \end{frame}
 
 % ═════════════════════════════════════════════════════════════════════════════
-% SLIDE 5 — Dataset Details: Class Distribution & Train/Test Split
+% SLIDE 5 — Cohort Scores Deep Dive: The 4 Features
 % ═════════════════════════════════════════════════════════════════════════════
-\begin{frame}{Slide 5 --- Dataset Details: Class Distribution \& Split}
+\begin{frame}{Slide 8 --- Cohort Scores: The 4 Features \hfill{\small\textit{[for more detail]}}}
 
   \begin{columns}[T]
 
-    %% ── Left: class distribution table ─────────────────────────────────────
-    \begin{column}{0.54\textwidth}
-      \textbf{\color{navyblue}Class Distribution (30,647 labeled rows)}
+    %% ── Left: metric definitions ─────────────────────────────────────────────
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{navyblue}Setup}
 
-      \vspace{0.3em}
-      {\small
-      \begin{tabular}{@{} l r r r @{}}
-        \toprule
-        Class & Count & \% labeled & MLP weight \\
-        \midrule
-        {\color{teal}nv}    & 18,068 & 58.9\% & 0.249 \\
-        {\color{orange}mel} &  5,106 & 16.7\% & 0.881 \\
-        {\color{orange}bcc} &  3,323 & 10.8\% & 1.354 \\
-        {\color{teal}bkl}   &  2,847 &  9.3\% & 1.581 \\
-        {\color{orange}akiec} & 1,064 & 3.5\% & 4.231 \\
-        {\color{teal}df}    &    239 &  0.8\% & 18.85 \\
-        \midrule
-        {\color{darkred}Malignant} & 9,493 & 31.0\% & \\
-        {\color{darkgreen}Benign}  & 21,154 & 69.0\% & \\
-        \bottomrule
-      \end{tabular}
+      \vspace{0.2em}
+      {\scriptsize
+      The KNN index is built from \textbf{benign images only}.
+      Every image (benign or malignant) is then \textbf{scored against} that
+      index --- asking: \textit{how far does this embedding sit from the
+      benign cluster?} We query the \textbf{20 nearest benign neighbors}
+      and compute 4 features from those 20 distances.
       }
 
-      \vspace{0.4em}
-      {\scriptsize\color{gray}
-      Weights $= N_{\text{total}}/(N_{\text{classes}} \times N_c)$ applied to CrossEntropyLoss.\\
-      75:1 nv:df imbalance makes weighting essential.}
+      \vspace{0.35em}
+      \textbf{\color{orange}knn\_mean\_dist}\\
+      {\scriptsize Mean of all 20 distances. General signal: how far is this
+      lesion from the benign cluster overall?}
+
+      \vspace{0.25em}
+      \textbf{\color{darkred}knn\_min\_dist} {\scriptsize\color{gray}(most important feature, importance 0.127)}\\
+      {\scriptsize Distance to the single closest benign neighbor.
+      If even the nearest normal lesion is far away, the image
+      resembles nothing in the benign cohort --- strong red flag.}
+
+      \vspace{0.25em}
+      \textbf{\color{purple}knn\_std\_dist}\\
+      {\scriptsize Spread of the 20 distances. Low std = uniformly
+      isolated outlier. High std = sits on the boundary between clusters
+      --- ambiguous case.}
+
+      \vspace{0.25em}
+      \textbf{\color{teal}lof\_score}\\
+      {\scriptsize Local Outlier Factor --- measures relative \textbf{density},
+      not just distance. Compares how tightly packed the neighborhood
+      around the query is vs.\ the neighborhoods of its neighbors.
+      LOF $\approx 1$ = inside cluster. LOF $\gg 1$ = isolated outlier
+      in structurally sparse space.}
     \end{column}
 
-    %% ── Right: source breakdown + train/test split ──────────────────────────
-    \begin{column}{0.42\textwidth}
-      \textbf{\color{navyblue}Source Breakdown}
+    %% ── Right: worked example ────────────────────────────────────────────────
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{navyblue}Worked Example}
+
+      \vspace{0.2em}
+      {\scriptsize
+      Patient: 58-year-old male, back lesion\\
+      Cohort key: \texttt{old|male|torso} --- 847 benign reference images\\
+      Query: 20 nearest neighbors returned with cosine distances:
+      }
+
+      \vspace{0.2em}
+      {\scriptsize
+      \begin{tabular}{@{} ccccc @{}}
+        0.04 & 0.06 & 0.07 & 0.09 & 0.11 \\
+        0.13 & 0.14 & 0.15 & 0.17 & 0.18 \\
+        0.19 & 0.20 & 0.21 & 0.22 & 0.22 \\
+        0.23 & 0.23 & 0.24 & 0.24 & 0.25 \\
+      \end{tabular}
+      }
 
       \vspace{0.3em}
-      {\small
-      \begin{tabular}{@{} l r r @{}}
+      {\scriptsize
+      \begin{tabular}{@{} ll @{}}
         \toprule
-        Dataset & Images & Labeled \\
+        Feature & Value \\
         \midrule
-        HAM10000  &  9,873 &  9,873 \\
-        ISIC 2019 & 14,774 & 14,774 \\
-        ISIC 2020 & 33,126 &  6,000 \\
-        \midrule
-        \textbf{Total} & \textbf{57,773} & \textbf{30,647} \\
+        \textcolor{orange}{knn\_mean\_dist} & 0.163 (mean of 20) \\
+        \textcolor{darkred}{knn\_min\_dist}  & 0.04  (closest neighbor) \\
+        \textcolor{purple}{knn\_std\_dist}  & 0.062 (spread) \\
+        \textcolor{teal}{lof\_score}        & 2.31  (sparse region) \\
         \bottomrule
       \end{tabular}
       }
 
-      \vspace{0.5em}
-      \textbf{\color{navyblue}Train / Test Split}
-
       \vspace{0.3em}
-      {\small
-      \begin{tabular}{@{} l r r r @{}}
-        \toprule
-        Split & Rows & Mal. & Ben. \\
-        \midrule
-        Train 75\% & 22,985 & 7,102 & 15,883 \\
-        Test  25\% &  7,662 & 2,373 &  5,289 \\
-        \bottomrule
-      \end{tabular}
-      }
-
-      \vspace{0.4em}
-      {\scriptsize\color{gray}
-      Stratified once, locked.\\ All downstream models respect this boundary.}
+      \begin{alertblock}{Interpretation}
+        \scriptsize
+        Mean dist 0.163 is elevated. But \texttt{knn\_min\_dist=0.04}
+        means one close benign neighbor exists --- ambiguous.
+        However \texttt{lof\_score=2.31} reveals the image sits in
+        a structurally sparse region. XGBoost combines all four
+        signals to make the final call.
+      \end{alertblock}
     \end{column}
 
   \end{columns}
 \end{frame}
 
 % ═════════════════════════════════════════════════════════════════════════════
-% SLIDE 6 — MLP Architecture & Per-Class Accuracy
+% SLIDE 7 — MLP Architecture & Per-Class Accuracy
 % ═════════════════════════════════════════════════════════════════════════════
-\begin{frame}{Slide 6 --- MLP Classifier: Architecture \& Results}
+\begin{frame}{Slide 9 --- MLP Classifier: Architecture \& Results}
 
   \begin{columns}[T]
 
@@ -559,9 +778,112 @@
 \end{frame}
 
 % ═════════════════════════════════════════════════════════════════════════════
-% SLIDE 7 — Why MLP? Design Strategy
+% SLIDE 8 — How MLP Works: The Forward Pass
 % ═════════════════════════════════════════════════════════════════════════════
-\begin{frame}{Slide 7 --- Why MLP? Design Strategy}
+\begin{frame}{Slide 10 --- How MLP Works: Inside the Forward Pass \hfill{\small\textit{[for more detail]}}}
+
+  \begin{columns}[T]
+
+    %% ── Left: forward pass walkthrough ──────────────────────────────────────
+    \begin{column}{0.50\textwidth}
+      \textbf{\color{navyblue}MLP is a Neural Network}
+
+      \vspace{0.2em}
+      {\scriptsize
+      An MLP (Multi-Layer Perceptron) is the simplest form of neural network
+      --- fully connected, feedforward. Every neuron in one layer connects to
+      every neuron in the next. No convolutions, no recurrence. Perfect for
+      a flat input vector like our 1408-D embedding.
+      }
+
+      \vspace{0.3em}
+      \textbf{\color{navyblue}The Forward Pass (one image)}
+
+      \vspace{0.2em}
+      {\scriptsize
+      \textbf{Input:} $\mathbf{x} \in \mathbb{R}^{1408}$ --- the embedding vector
+
+      \vspace{0.2em}
+      \textbf{Layer 1 --- Linear(1408 $\to$ 512):}
+      \[ \mathbf{z}_1 = \mathbf{W}_1 \mathbf{x} + \mathbf{b}_1 \quad \in \mathbb{R}^{512} \]
+      Each of the 512 neurons computes a weighted sum of all 1408 inputs.
+
+      \vspace{0.1em}
+      \textbf{ReLU:} $\mathbf{h}_1 = \max(0,\, \mathbf{z}_1)$
+      --- kills negatives, preserves non-linearity.
+      Without this, stacked layers collapse to one linear transform.
+
+      \vspace{0.1em}
+      \textbf{Dropout(0.3):} randomly zero 30\% of neurons during training
+      --- forces redundant representations, prevents overfitting.
+
+      \vspace{0.2em}
+      \textbf{Layer 2 --- Linear(512 $\to$ 256) $\to$ ReLU $\to$ Dropout}\\
+      Builds higher-level abstractions from layer 1 combinations.
+
+      \vspace{0.2em}
+      \textbf{Layer 3 --- Linear(256 $\to$ 6):}
+      \[ \mathbf{z}_3 = \mathbf{W}_3 \mathbf{h}_2 + \mathbf{b}_3 \quad \in \mathbb{R}^{6} \]
+
+      \vspace{0.1em}
+      \textbf{Softmax:}
+      $p_c = \exp(z_c) \;/\; \textstyle\sum_j \exp(z_j)$
+      --- converts 6 raw scores to probabilities summing to 1.
+      }
+    \end{column}
+
+    %% ── Right: training + why embeddings ────────────────────────────────────
+    \begin{column}{0.46\textwidth}
+      \textbf{\color{navyblue}How It Learns}
+
+      \vspace{0.2em}
+      {\scriptsize
+      For a melanoma image the true label is $[1,0,0,0,0,0]$.
+      If the network predicts $[0.45, 0.12, 0.28, \ldots]$ the
+      \textbf{cross-entropy loss} is high.
+
+      \vspace{0.2em}
+      \textbf{Backpropagation} computes how much each weight
+      contributed to that loss and adjusts it to reduce the error.
+      Repeat across thousands of images --- weights converge to
+      values that correctly map visual patterns to diagnoses.
+
+      \vspace{0.2em}
+      \textbf{Inverse-frequency class weights} mean a dermatofibroma
+      error hurts $18.85\times$ more than a nevus error in the loss
+      --- forcing the network to learn rare classes it would otherwise
+      ignore.
+      }
+
+      \vspace{0.3em}
+      \begin{exampleblock}{Why embeddings make this easy}
+        \scriptsize
+        We are not feeding raw pixels. Vertex AI's ViT already
+        processed texture, color, and shape into a rich
+        1408-D representation. The MLP only needs to learn
+        \textit{which combinations of those features correspond
+        to which diagnosis} --- a much simpler problem than
+        learning from scratch, which is why a small 3-layer
+        network is sufficient.
+      \end{exampleblock}
+
+      \vspace{0.3em}
+      \begin{block}{Output}
+        \scriptsize
+        $[\,p_{\text{mel}}=0.45,\; p_{\text{nv}}=0.12,\;
+        p_{\text{bcc}}=0.28,\; p_{\text{akiec}}=0.05,\;
+        p_{\text{bkl}}=0.09,\; p_{\text{df}}=0.01\,]$\\
+        These 6 numbers become features for XGBoost.
+      \end{block}
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 9 — Why MLP? Design Strategy
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 11 --- Why MLP? Design Strategy}
 
   \begin{columns}[T]
 
@@ -628,9 +950,9 @@
 \end{frame}
 
 % ═════════════════════════════════════════════════════════════════════════════
-% SLIDE 8 — XGBoost: Features, CV Results & Feature Importance
+% SLIDE 10 — XGBoost: Features, CV Results & Feature Importance
 % ═════════════════════════════════════════════════════════════════════════════
-\begin{frame}{Slide 8 --- XGBoost Classifier: Features \& Validation}
+\begin{frame}{Slide 12 --- XGBoost Classifier: Features \& Validation}
 
   \begin{columns}[T]
 
@@ -715,9 +1037,9 @@
 \end{frame}
 
 % ═════════════════════════════════════════════════════════════════════════════
-% SLIDE 9 — XGBoost: Why Gradient Boosting?
+% SLIDE 11 — XGBoost: Why Gradient Boosting?
 % ═════════════════════════════════════════════════════════════════════════════
-\begin{frame}{Slide 9 --- XGBoost: Why Gradient Boosting?}
+\begin{frame}{Slide 13 --- XGBoost: Why Gradient Boosting? \hfill{\small\textit{[for more detail]}}}
 
   \begin{columns}[T]
 
@@ -797,9 +1119,86 @@
 \end{frame}
 
 % ═════════════════════════════════════════════════════════════════════════════
-% SLIDE 10 — Final Results: Threshold Tuning Comparison
+% SLIDE 12 — Evaluation Metrics Explained
 % ═════════════════════════════════════════════════════════════════════════════
-\begin{frame}{Slide 10 --- Results: Why $\tau = 0.20$?}
+\begin{frame}{Slide 14 --- How We Measure Performance \hfill{\small\textit{[for more detail]}}}
+
+  \begin{columns}[T]
+
+    %% ── Left: confusion matrix ───────────────────────────────────────────────
+    \begin{column}{0.38\textwidth}
+      \textbf{\color{navyblue}Confusion Matrix}
+
+      \vspace{0.3em}
+      {\small Every prediction falls into one of four buckets:}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} r | c c @{}}
+        & \textbf{Pred. Mal.} & \textbf{Pred. Ben.} \\
+        \hline
+        \textbf{Actually Mal.} & \textcolor{darkgreen}{TP} & \textcolor{darkred}{FN} \\
+        \textbf{Actually Ben.} & \textcolor{orange}{FP}    & \textcolor{teal}{TN} \\
+      \end{tabular}
+      }
+
+      \vspace{0.4em}
+      {\scriptsize
+      \textcolor{darkgreen}{\textbf{TP}} — correctly flagged cancer\\
+      \textcolor{darkred}{\textbf{FN}} — \textbf{missed cancer} --- the dangerous one\\
+      \textcolor{orange}{\textbf{FP}} — flagged benign as cancer --- annoying, not deadly\\
+      \textcolor{teal}{\textbf{TN}} — correctly cleared benign lesion
+      }
+
+      \vspace{0.4em}
+      \begin{alertblock}{Clinical Priority}
+        \scriptsize Minimizing \textbf{FN} (missed cancers) is the primary goal.
+        A false alarm costs a biopsy.
+        A missed cancer costs a life.
+      \end{alertblock}
+    \end{column}
+
+    %% ── Right: metric definitions ────────────────────────────────────────────
+    \begin{column}{0.58\textwidth}
+      \textbf{\color{navyblue}Key Metrics}
+
+      \vspace{0.3em}
+      {\small
+      \begin{tabular}{@{} p{2.0cm} p{2.2cm} p{3.0cm} @{}}
+        \toprule
+        Metric & Formula & Clinical meaning \\
+        \midrule
+        \textbf{Recall} (Sensitivity)
+          & $\frac{TP}{TP+FN}$
+          & Of all cancers, how many did we catch? \newline \textcolor{darkgreen}{Ours: 0.954 \checkmark} \\
+        \addlinespace
+        \textbf{Precision} (PPV)
+          & $\frac{TP}{TP+FP}$
+          & Of flags raised, how many were real cancers? \\
+        \addlinespace
+        \textbf{Specificity}
+          & $\frac{TN}{TN+FP}$
+          & Of benign lesions, how many cleared correctly? \\
+        \addlinespace
+        \textbf{NPV}
+          & $\frac{TN}{TN+FN}$
+          & If model says benign, how often is it right? \newline \textcolor{darkgreen}{Ours: 0.973 \checkmark} \\
+        \addlinespace
+        \textbf{ROC-AUC}
+          & area under ROC curve
+          & Threshold-independent separation quality. \newline 0.5 = random, 1.0 = perfect. \newline \textcolor{darkgreen}{Ours: 0.9335} \\
+        \bottomrule
+      \end{tabular}
+      }
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 13 — Final Results: Threshold Tuning Comparison
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 15 --- Results: Why $\tau = 0.20$?}
 
   \begin{columns}[T]
 
@@ -842,7 +1241,7 @@
         \toprule
         Metric & $\tau = 0.20$ & $\tau = 0.50$ \\
         \midrule
-        ROC-AUC     & \textbf{0.9335} & 0.9521 \\
+        ROC-AUC     & \textbf{0.9335} & 0.9335 \\
         Recall      & \textbf{0.9541} \checkmark & 0.8710 $\times$ \\
         Precision   & 0.6320 & 0.7920 \\
         F1 Score    & 0.7604 & 0.8296 \\
@@ -863,9 +1262,9 @@
 \end{frame}
 
 % ═════════════════════════════════════════════════════════════════════════════
-% SLIDE 11 — Physician UI Mockup
+% SLIDE 14 — Physician UI Mockup
 % ═════════════════════════════════════════════════════════════════════════════
-\begin{frame}{Slide 11 --- Physician UI: What the Doctor Sees}
+\begin{frame}{Slide 16 --- Physician UI: What the Doctor Sees}
   \vspace{-0.3em}
   \begin{center}
   \begin{tikzpicture}[scale=0.70, font=\tiny]
@@ -991,9 +1390,169 @@
 \end{frame}
 
 % ═════════════════════════════════════════════════════════════════════════════
-% SLIDE 12 — Limitations & Future Work
+% SLIDE 16b — LLM Summarization Layer
 % ═════════════════════════════════════════════════════════════════════════════
-\begin{frame}{Slide 12 --- Limitations \& Future Work}
+\begin{frame}{Slide 17 --- Future Direction: LLM Summarization Layer}
+
+  \begin{columns}[T]
+
+    %% ── Left: the problem + idea ─────────────────────────────────────────────
+    \begin{column}{0.44\textwidth}
+      \textbf{\color{navyblue}The Cognitive Load Problem}
+
+      \vspace{0.3em}
+      {\small
+      The physician currently receives three separate outputs
+      and must mentally synthesize them:
+      \begin{itemize}[leftmargin=1em, itemsep=2pt]
+        \item MLP 6-class probability distribution
+        \item XGBoost P(malignant) + biopsy flag
+        \item Top-$k$ similar historical cases
+      \end{itemize}
+      }
+
+      \vspace{0.4em}
+      \begin{block}{Proposed Addition}
+        \small
+        A lightweight LLM layer that receives \textbf{all model
+        outputs} --- probabilities, cohort deviation scores,
+        similar cases, patient metadata --- and generates a
+        concise \textbf{clinical narrative} the physician can
+        act on immediately.
+      \end{block}
+
+      \vspace{0.3em}
+      {\scriptsize\color{gray}
+      The LLM does not make any clinical decision.\\
+      It reduces the cognitive load of reading raw numbers.}
+    \end{column}
+
+    %% ── Right: example output + conflict detection ───────────────────────────
+    \begin{column}{0.52\textwidth}
+      \textbf{\color{navyblue}Example LLM Output}
+
+      \vspace{0.3em}
+      \begin{exampleblock}{}
+        \scriptsize
+        \textit{``This lesion shows strong melanoma
+        characteristics (45\%) with notable BCC overlap (28\%).
+        The malignancy score of 0.73 exceeds the clinical
+        threshold. Cohort deviation is elevated --- this lesion
+        looks significantly different from the 847 benign back
+        lesions in similar patients, with the closest benign
+        neighbor still 0.21 away. Three visually similar
+        historical cases were retrieved: two confirmed melanoma,
+        one BCC. \textbf{Recommend biopsy.}''}
+      \end{exampleblock}
+
+      \vspace{0.3em}
+      \begin{alertblock}{Conflicting Signal Detection}
+        \scriptsize
+        The LLM can flag when outputs disagree --- e.g.\
+        \textit{``MLP shows moderate nevus probability (12\%)
+        which conflicts with the elevated cohort deviation
+        score. Warrants careful review.''}\\[0.3em]
+        This is where LLM reasoning adds value beyond
+        summarization --- catching ambiguous cases before
+        they reach the physician.
+      \end{alertblock}
+
+      \vspace{0.2em}
+      {\scriptsize\color{gray}
+      Context fed to LLM: MLP probs · XGBoost score · knn\_min\_dist
+      · lof\_score · top-$k$ case labels · age / sex / site}
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 16c — Bayesian Update Layer
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 18 --- Future Direction: Bayesian Clinical Context Layer}
+
+  \begin{columns}[T]
+
+    %% ── Left: concept + formula ──────────────────────────────────────────────
+    \begin{column}{0.42\textwidth}
+      \textbf{\color{navyblue}The Problem}
+
+      \vspace{0.2em}
+      {\small
+      The MLP sees only the image. It has no idea whether the
+      patient is 25 or 75, male or female. A 25-year-old female
+      and a 68-year-old male can produce the \textbf{same MLP
+      output} --- but the clinical reality is very different.
+      }
+
+      \vspace{0.4em}
+      \textbf{\color{navyblue}The Fix: Bayesian Update}
+
+      \vspace{0.2em}
+      {\small
+      After the MLP produces its 6-class probabilities, the
+      physician enters clinical context. A precomputed prior
+      table --- $P(\text{class} \mid \text{age, sex, site})$
+      --- shifts the distribution without rerunning any model:
+      }
+
+      \vspace{0.3em}
+      \begin{block}{Formula}
+        \small
+        \[
+          P_c^{\text{updated}} =
+          \frac{P_c^{\text{MLP}} \;\times\; P(\text{class}_c \mid \text{context})}
+               {\displaystyle\sum_j P_j^{\text{MLP}} \times P(\text{class}_j \mid \text{context})}
+        \]
+        {\scriptsize Multiply each class score by its demographic
+        prior, then renormalise to sum to 1.}
+      \end{block}
+    \end{column}
+
+    %% ── Right: worked example ────────────────────────────────────────────────
+    \begin{column}{0.54\textwidth}
+      \textbf{\color{navyblue}Same Image --- Two Patients}
+
+      \vspace{0.3em}
+      {\scriptsize MLP output (image only):
+      mel=0.45 · nv=0.12 · bcc=0.28 · akiec=0.05 · bkl=0.09 · df=0.01}
+
+      \vspace{0.4em}
+      {\small
+      \begin{tabular}{@{} l r r @{}}
+        \toprule
+        Class & \textbf{Patient A} & \textbf{Patient B} \\
+              & {\scriptsize 25F · face} & {\scriptsize 68M · back} \\
+        \midrule
+        {\color{darkred}mel}   & 0.45 $\to$ \textbf{0.14} & 0.45 $\to$ \textbf{0.56} \\
+        {\color{teal}nv}       & 0.12 $\to$ \textbf{0.50} & 0.12 $\to$ \textbf{0.08} \\
+        {\color{darkred}bcc}   & 0.28 $\to$ \textbf{0.22} & 0.28 $\to$ \textbf{0.27} \\
+        {\color{darkred}akiec} & 0.05 $\to$ \textbf{0.04} & 0.05 $\to$ \textbf{0.06} \\
+        {\color{teal}bkl}      & 0.09 $\to$ \textbf{0.09} & 0.09 $\to$ \textbf{0.03} \\
+        {\color{teal}df}       & 0.01 $\to$ \textbf{0.01} & 0.01 $\to$ \textbf{0.00} \\
+        \midrule
+        \textbf{P(malignant)}  & 0.73 $\to$ \textcolor{teal}{\textbf{0.40}} & 0.73 $\to$ \textcolor{darkred}{\textbf{0.89}} \\
+        \textbf{Decision}      & \textcolor{teal}{watch} & \textcolor{darkred}{biopsy} \\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.3em}
+      {\scriptsize\color{gray}
+      Patient A: melanoma is rare in young females on the face ---
+      prior pulls mel down, nv up.\\
+      Patient B: melanoma is common in older males on the back ---
+      prior reinforces mel, raises overall malignancy score.\\[0.3em]
+      No model reruns. The prior table is precomputed from training data.}
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 15 — Limitations & Future Work
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 19 --- Limitations \& Future Work}
 
   \begin{columns}[T]
 
@@ -1037,6 +1596,176 @@
                 $\times$ neighbor label agreement for physician trust calibration.
         \end{itemize}
       \end{block}
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% SLIDES 16 AND 17 REMOVED
+\end{document}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 16 — Physician Feedback Loop (removed)
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 16 --- Physician Feedback: Teaching the Model Over Time}
+
+  \begin{columns}[T]
+
+    %% ── Left: offline retraining ─────────────────────────────────────────────
+    \begin{column}{0.32\textwidth}
+      \begin{block}{Approach 1 --- Offline Retraining}
+        \scriptsize
+        \textbf{How it works:}\\
+        Physician flags a wrong prediction
+        (e.g.\ ``model said benign, biopsy confirmed melanoma'').
+        Correction is logged to a feedback database.
+        Periodically --- weekly or monthly --- XGBoost and MLP
+        are retrained on original data + feedback cases,
+        with feedback rows upweighted.
+
+        \vspace{0.3em}
+        \textbf{Bayesian connection:}\\
+        The prior table $P(\text{class} \mid \text{age, sex, site})$
+        is recomputed from the expanded dataset. If a clinic
+        sees unusually high melanoma rates in older males,
+        that prior shifts --- adjusting every future prediction
+        for that demographic before the image is even analyzed.
+
+        \vspace{0.3em}
+        \textbf{Pros:} Simple, safe, stable.\\
+        \textbf{Cons:} Model only improves on next deployment cycle.
+      \end{block}
+    \end{column}
+
+    %% ── Middle: online reranking ─────────────────────────────────────────────
+    \begin{column}{0.34\textwidth}
+      \begin{alertblock}{Approach 2 --- Online Reranking Layer}
+        \scriptsize
+        \textbf{How it works:}\\
+        A lightweight layer sits \textit{on top} of XGBoost.
+        The base model score is fixed. The reranker adjusts it
+        up or down in near real-time based on patterns learned
+        from physician overrides --- without touching the
+        underlying model.
+
+        \vspace{0.3em}
+        \textbf{Bayesian framing:}
+        \[
+          P(M \mid \text{img, feedback})
+        \]
+        \[
+          \propto \underbrace{P(\text{fb} \mid M)}_{\text{reranker}}
+          \times \underbrace{P(M \mid \text{img})}_{\text{XGBoost}}
+        \]
+        If physicians at a clinic consistently override the model
+        for lesions on darker skin, the reranker learns that
+        correction and applies it to similar future cases
+        automatically.
+
+        \vspace{0.2em}
+        \textbf{Pros:} Near real-time improvement.\\
+        \textbf{Cons:} Risk of drift if feedback is noisy.
+      \end{alertblock}
+    \end{column}
+
+    %% ── Right: how they compose ──────────────────────────────────────────────
+    \begin{column}{0.30\textwidth}
+      \textbf{\color{navyblue}How All Three Compose}
+
+      \vspace{0.3em}
+      {\scriptsize
+      \begin{tabular}{@{} p{2.6cm} @{}}
+        \toprule
+        \textbf{Base XGBoost score}\\
+        $P(M \mid \text{image})$\\
+        \midrule
+        $\times$\; \textbf{Clinical prior}\\
+        $P(\text{class} \mid \text{age, sex, site})$\\
+        Updates from offline retraining\\
+        \midrule
+        $\times$\; \textbf{Feedback correction}\\
+        $P(\text{feedback} \mid M)$\\
+        Learned from physician overrides\\
+        \midrule
+        $=$ \textbf{Final calibrated score}\\
+        \bottomrule
+      \end{tabular}
+      }
+
+      \vspace{0.3em}
+      {\scriptsize\color{gray}
+      Three multiplicative factors, each adding
+      a different type of knowledge:
+      \begin{itemize}[leftmargin=1em, itemsep=0pt]
+        \item Visual (XGBoost)
+        \item Demographic (prior table)
+        \item Experiential (feedback reranker)
+      \end{itemize}
+      The current system has the first two.
+      The reranking layer is the natural next step.
+      }
+    \end{column}
+
+  \end{columns}
+\end{frame}
+
+% ═════════════════════════════════════════════════════════════════════════════
+% SLIDE 17 — Industry Comparison
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{frame}{Slide 17 --- How We Compare to Industry}
+
+  \begin{columns}[T]
+
+    %% ── Left: where we are on par ────────────────────────────────────────────
+    \begin{column}{0.48\textwidth}
+      \begin{exampleblock}{Where We Are On Par}
+        \scriptsize
+        \begin{itemize}[leftmargin=1em, itemsep=0pt]
+          \item \textbf{XGBoost on learned features} --- the same pattern
+                used by Google, Meta, and most production ML systems.
+                More interpretable and faster to retrain than end-to-end
+                deep learning
+          \item \textbf{Cohort deviation} --- clinically grounded signal
+                most academic pipelines skip. Validated by \texttt{knn\_min\_dist}
+                becoming the \#2 most important XGBoost feature
+          \item \textbf{Threshold tuning for recall} --- explicitly
+                optimizing for the clinical objective rather than default
+                $\tau=0.50$. Standard in any serious clinical ML system
+          \item \textbf{OOF discipline} --- rigorous leakage prevention
+                across pipeline stages; same standard as production deployments
+        \end{itemize}
+      \end{exampleblock}
+    \end{column}
+
+    %% ── Right: where industry is ahead ──────────────────────────────────────
+    \begin{column}{0.48\textwidth}
+      \begin{alertblock}{Where Industry Is Ahead}
+        \scriptsize
+        \begin{itemize}[leftmargin=1em, itemsep=0pt]
+          \item \textbf{End-to-end fine-tuning} --- industry unfreezes the
+                ViT backbone and trains it jointly with the classifier on
+                dermoscopy data. Gradients flow all the way back through
+                the embedding model, teaching it to encode dermoscopy-specific
+                structures (blue-white veils, pigment networks). We cannot
+                do this --- \texttt{multimodalembedding@001} is a closed API
+          \item \textbf{Domain-specific foundation models} --- Google Health,
+                PathAI, Skin Analytics pretrain on millions of clinical images.
+                A dermoscopy-specific ViT would close most of our AUC gap
+          \item \textbf{Uncertainty quantification} --- industry outputs
+                calibrated confidence intervals (``$73\% \pm 12\%$''), not
+                point estimates. Requires Bayesian deep learning or
+                Monte Carlo dropout
+          \item \textbf{Data scale} --- 30,647 labeled images vs.\ millions
+                in proprietary clinical datasets
+        \end{itemize}
+      \end{alertblock}
+
+      \vspace{0.2em}
+      {\scriptsize\color{gray}
+      Swapping \texttt{multimodalembedding@001} for an open-source
+      dermoscopy foundation model (e.g.\ SkinGPT) would close most
+      of the gap immediately --- the pipeline architecture is already
+      production-grade.}
     \end{column}
 
   \end{columns}
