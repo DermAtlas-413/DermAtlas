@@ -3,7 +3,7 @@ Async SQLAlchemy engine and session factory.
 
 Two engine strategies are supported:
   - Direct URL  (development / testing): create_async_engine(DATABASE_URL)
-  - Cloud SQL connector (staging / production): async_creator= via AsyncConnector
+  - Cloud SQL connector (staging / production): async_creator= via Connector + asyncpg
 """
 
 from __future__ import annotations
@@ -33,12 +33,14 @@ def _build_direct_engine(settings) -> AsyncEngine:
 
 
 def _build_cloud_sql_engine(settings) -> AsyncEngine:
-    from google.cloud.sql.connector import AsyncConnector  # type: ignore[import]
+    from google.cloud.sql.connector import create_async_connector  # type: ignore[import]
 
-    connector = AsyncConnector()
+    _connector: list = []  # mutable container so the closure can assign once
 
     async def getconn():
-        return await connector.connect(
+        if not _connector:
+            _connector.append(await create_async_connector())
+        return await _connector[0].connect_async(
             settings.CLOUD_SQL_INSTANCE_CONNECTION_NAME,
             "asyncpg",
             user=settings.PGUSER,
@@ -54,7 +56,7 @@ def _build_cloud_sql_engine(settings) -> AsyncEngine:
     )
 
 
-def init_db_engine() -> None:
+async def init_db_engine() -> None:
     """Create the engine and session factory. Called once at application startup."""
     global engine, AsyncSessionLocal
 
@@ -83,4 +85,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     if AsyncSessionLocal is None:
         raise RuntimeError("Database engine not initialised. Call init_db_engine() first.")
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

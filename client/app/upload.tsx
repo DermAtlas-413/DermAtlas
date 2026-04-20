@@ -3,226 +3,332 @@ import {
   SafeAreaView,
   View,
   Text,
-  TextInput,
   Pressable,
   StyleSheet,
-  Image,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useAuthStore } from "@/state/auth-store";
+import { useCurrentCaseStore } from "@/state/current-case-store";
+import { useRequireRole } from "@/hooks/use-require-role";
+import { uploadImage } from "@/services/upload-service";
+import { useImageCapture } from "@/hooks/use-image-capture";
+import { PatientSelector } from "@/components/patient-selector";
+import type { PatientResponse } from "@/types/api";
+import { displayRole } from "@/types/api";
+import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Upload() {
+  const authorized = useRequireRole("PCP");
   const router = useRouter();
-  const [patientId, setPatientId] = useState("");
+  const user = useAuthStore((s) => s.user);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+  const setCase = useCurrentCaseStore((s) => s.setCase);
+  const [selectedPatient, setSelectedPatient] = useState<PatientResponse | null>(null);
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const { pickFromCamera, pickFromLibrary } = useImageCapture(setImageUri);
+
+  if (!authorized) return null;
+
+  function handleLogout() {
+    clearAuth();
+    router.replace("/");
+  }
+
+  async function handleSubmit() {
+    if (!selectedPatient) {
+      Alert.alert("No patient selected", "Please select a patient before submitting.");
+      return;
+    }
+    if (!imageUri) {
+      Alert.alert("No image selected", "Please capture or upload a lesion image first.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      const res = await uploadImage(blob, selectedPatient.patient_id, "unspecified");
+      setCase({
+        patientId: selectedPatient.patient_id,
+        patientMrn: selectedPatient.mrn_internal,
+        patientName: selectedPatient.full_name ?? "",
+        queryId: res.query_id,
+        imageUri,
+      });
+      router.push(`/compare?queryId=${encodeURIComponent(res.query_id)}`);
+    } catch (err) {
+      Alert.alert("Upload failed", err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.page}>
-        <View style={styles.card}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerBtn} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>New Case</Text>
+          <Text style={styles.headerSubtitle}>
+            {user?.fullName ?? "—"} · {displayRole(user?.role)}
+          </Text>
+        </View>
+        <View style={styles.headerRight}>
+          <Pressable
+            style={styles.headerBtn}
+            onPress={() => router.push("/profile")}
+          >
+            <MaterialCommunityIcons
+              name="account-circle-outline"
+              size={22}
+              color={D.onPrimary}
+            />
+          </Pressable>
+          <Pressable style={styles.headerBtnAlt} onPress={handleLogout}>
+            <Text style={styles.headerBtnAltText}>Logout</Text>
+          </Pressable>
+        </View>
+      </View>
 
-          {/* Top Bar */}
-          <View style={styles.topBar}>
-            <Text style={styles.backArrow}>‹</Text>
-            <Text style={styles.doctor}>Dr. Quach (PCP)</Text>
-            <Pressable onPress={() => router.replace("/")}>
-              <Text style={styles.logout}>Logout</Text>
-            </Pressable>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={styles.page}>
+          {/* Patient selector */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Patient Information</Text>
+            <PatientSelector
+              selectedPatient={selectedPatient}
+              onSelect={setSelectedPatient}
+            />
           </View>
 
-          {/* Patient ID */}
-          <TextInput
-            value={patientId}
-            onChangeText={setPatientId}
-            placeholder="New Case: Patient ID # ______"
-            placeholderTextColor={vars.placeholder}
-            style={styles.input}
-          />
+          {/* Image upload */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Lesion Image</Text>
+            <View style={styles.imageCard}>
+              {imageUri ? (
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.imagePreview}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <MaterialCommunityIcons
+                    name="image-outline"
+                    size={52}
+                    color={D.border}
+                  />
+                  <Text style={styles.imagePlaceholderText}>
+                    No image selected
+                  </Text>
+                  <Text style={styles.imagePlaceholderSub}>
+                    Full lesion in frame, well-lit
+                  </Text>
+                </View>
+              )}
 
-          {/* Image Panel */}
-          <View style={styles.imagePanel}>
-            <View style={styles.imagePlaceholder}>
-              <Text style={styles.imageIcon}>🖼️</Text>
+              <View style={styles.actionRow}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.actionCard,
+                    pressed && styles.actionCardPressed,
+                  ]}
+                  onPress={pickFromCamera}
+                >
+                  <View style={styles.actionIconWrap}>
+                    <MaterialCommunityIcons
+                      name="camera-outline"
+                      size={26}
+                      color={D.primary}
+                    />
+                  </View>
+                  <Text style={styles.actionLabel}>Camera</Text>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.actionCard,
+                    pressed && styles.actionCardPressed,
+                  ]}
+                  onPress={pickFromLibrary}
+                >
+                  <View style={styles.actionIconWrap}>
+                    <MaterialCommunityIcons
+                      name="image-plus"
+                      size={26}
+                      color={D.primary}
+                    />
+                  </View>
+                  <Text style={styles.actionLabel}>Upload</Text>
+                </Pressable>
+              </View>
             </View>
-
-            <Pressable style={styles.smallButton}>
-              <Text style={styles.smallButtonText}>
-                [ Select an Image Below ]
-              </Text>
-            </Pressable>
           </View>
 
-          {/* Two Action Cards */}
-          <View style={styles.row}>
-            <Pressable style={styles.actionCard}>
-              <Text style={styles.icon}>📷</Text>
-              <Text style={styles.actionText}>Take Photo</Text>
-            </Pressable>
-
-            <Pressable style={styles.actionCard}>
-              <Text style={styles.icon}>⬆️</Text>
-              <Text style={styles.actionText}>Upload Photo</Text>
-            </Pressable>
+          {/* Guideline */}
+          <View style={styles.guideCard}>
+            <MaterialCommunityIcons
+              name="information-outline"
+              size={16}
+              color={D.primary}
+            />
+            <Text style={styles.guideText}>
+              Ensure the full lesion is visible, the image is in focus, and
+              lighting is uniform for best results.
+            </Text>
           </View>
 
           {/* Submit */}
-          <Pressable style={styles.submitButton}
-            onPress={() => router.push("/compare")}
+          <Pressable
+            style={({ pressed }) => [
+              styles.submitBtn,
+              pressed && styles.submitBtnPressed,
+              (uploading || !selectedPatient) && styles.submitBtnDisabled,
+            ]}
+            onPress={handleSubmit}
+            disabled={uploading || !selectedPatient}
           >
+            {uploading ? (
+              <ActivityIndicator size="small" color={D.onPrimary} />
+            ) : (
+              <MaterialCommunityIcons name="send" size={18} color={D.onPrimary} />
+            )}
             <Text style={styles.submitText}>
-              Submit for Analysis
+              {uploading ? "Uploading…" : "Submit for Analysis"}
             </Text>
           </Pressable>
-
-          <Text style={styles.reminder}>
-            Reminder: Ensure full lesion is in frame and well-lit.
-          </Text>
-
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const vars = {
-  primary: "#118AB2",
-  border: "#69B5D3",
-  lightBlue: "#CFEFFC",
-  softBlue: "#D9EEF7",
-  bg: "#FFFFFF",
-  placeholder: "#67AFCB",
-  text: "#0B2B3A",
-};
-
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: vars.bg,
-  },
-  page: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 22,
-  },
-  card: {
-    borderWidth: 2,
-    borderColor: vars.border,
-    borderRadius: 32,
-    padding: 20,
-    backgroundColor: vars.bg,
-  },
+  safe: { flex: 1, backgroundColor: D.bg },
 
-  /* Top Bar */
-  topBar: {
-    height: 60,
-    backgroundColor: vars.primary,
-    borderRadius: 20,
-    marginBottom: 20,
-    paddingHorizontal: 16,
+  header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-  },
-  backArrow: {
-    color: "#FFFFFF",
-    fontSize: 28,
-    fontWeight: "800",
-  },
-  doctor: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  logout: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-
-  /* Input */
-  input: {
-    borderWidth: 2,
-    borderColor: vars.border,
-    borderRadius: 16,
-    paddingVertical: 12,
+    backgroundColor: D.primary,
     paddingHorizontal: 16,
-    fontSize: 15,
-    color: vars.text,
-    marginBottom: 18,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  headerBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: D.onPrimaryOverlay,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerCenter: { flex: 1, alignItems: "center" },
+  headerTitle: { color: D.onPrimary, fontWeight: "700", fontSize: 17 },
+  headerSubtitle: { color: D.onPrimaryMuted, fontSize: 11, fontWeight: "500" },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerBtnAlt: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: D.onPrimaryOverlay,
+  },
+  headerBtnAltText: { color: D.onPrimary, fontWeight: "600", fontSize: 13 },
+
+  scroll: { flexGrow: 1 },
+  page: {
+    padding: 20,
+    gap: 16,
+    maxWidth: 600,
+    alignSelf: "center",
+    width: "100%",
   },
 
-  /* Image Panel */
-  imagePanel: {
-    backgroundColor: vars.softBlue,
-    borderRadius: 20,
-    padding: 16,
-    alignItems: "center",
-    marginBottom: 20,
+  section: { gap: 8 },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: D.text,
+    letterSpacing: 0.3,
+  },
+
+  imageCard: {
+    backgroundColor: D.surface,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: D.border,
+  },
+  imagePreview: {
+    height: 200,
+    width: "100%",
   },
   imagePlaceholder: {
-    width: "100%",
-    height: 160,
-    backgroundColor: vars.lightBlue,
-    borderRadius: 18,
+    height: 200,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: D.border,
   },
-  imageIcon: {
-    fontSize: 40,
-    opacity: 0.6,
-  },
-  smallButton: {
-    backgroundColor: vars.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-  },
-  smallButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
+  imagePlaceholderText: { color: D.muted, fontWeight: "600", fontSize: 14 },
+  imagePlaceholderSub: { color: D.border, fontSize: 12, fontWeight: "500" },
 
-  /* Two cards */
-  row: {
+  actionRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 24,
+    padding: 14,
+    gap: 12,
   },
   actionCard: {
-    width: "48%",
-    backgroundColor: vars.lightBlue,
-    borderRadius: 20,
-    paddingVertical: 20,
+    flex: 1,
     alignItems: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: D.border,
+    backgroundColor: D.bg,
   },
-  icon: {
-    fontSize: 28,
-    marginBottom: 8,
-  },
-  actionText: {
-    backgroundColor: vars.primary,
-    color: "#FFFFFF",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  actionCardPressed: { opacity: 0.8 },
+  actionIconWrap: {},
+  actionLabel: { color: D.primary, fontWeight: "700", fontSize: 13 },
+
+  guideCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: D.infoSurface,
     borderRadius: 10,
-    fontWeight: "700",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-
-  /* Submit */
-  submitButton: {
-    backgroundColor: vars.primary,
-    paddingVertical: 18,
-    borderRadius: 22,
-    alignItems: "center",
-  },
-  submitText: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "800",
-  },
-
-  reminder: {
-    marginTop: 12,
-    textAlign: "center",
+  guideText: {
+    color: D.primary,
     fontSize: 12,
-    color: "#2C6A80",
-    fontWeight: "600",
+    fontWeight: "500",
+    flex: 1,
+    lineHeight: 18,
   },
+
+  submitBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: D.primary,
+    borderRadius: 14,
+    paddingVertical: 16,
+    gap: 10,
+    marginTop: 4,
+  },
+  submitBtnPressed: { opacity: 0.85 },
+  submitBtnDisabled: { opacity: 0.65 },
+  submitText: { color: D.onPrimary, fontSize: 16, fontWeight: "700" },
 });

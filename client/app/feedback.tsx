@@ -1,303 +1,425 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useState } from "react";
 import {
   SafeAreaView,
   View,
   Text,
   StyleSheet,
   Pressable,
-  Dimensions,
+  Alert,
   ScrollView,
-  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-
-type Slide = { key: string; label: string };
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { submitFeedback } from "@/services/feedback-service";
+import { useAuthStore } from "@/state/auth-store";
+import { useCurrentCaseStore } from "@/state/current-case-store";
+import { useRequireRole } from "@/hooks/use-require-role";
+import { ComparisonModal } from "@/components/comparison-modal";
+import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
+import { displayRole } from "@/types/api";
+import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Feedback() {
+  const authorized = useRequireRole("PCP");
   const router = useRouter();
-  const { matchId } = useLocalSearchParams<{ matchId?: string }>();
+  const user = useAuthStore((s) => s.user);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+  const { matchId, referenceId } = useLocalSearchParams<{
+    matchId?: string;
+    referenceId?: string;
+  }>();
+  const queryId = useCurrentCaseStore((s) => s.queryId);
+  const imageUri = useCurrentCaseStore((s) => s.imageUri);
+  const diagnosis = useCurrentCaseStore((s) => s.diagnosis);
+  const similarity = useCurrentCaseStore((s) => s.similarity);
+  const referenceImageUri = useCurrentCaseStore((s) => s.referenceImageUri);
 
-  const slides: Slide[] = useMemo(
-    () => [
-      { key: "1", label: `[Match ${matchId ?? "1"}]` },
-      { key: "2", label: `[Alt View]` },
-      { key: "3", label: `[Close-up]` },
-    ],
-    [matchId]
-  );
-
-  const [activeIndex, setActiveIndex] = useState(0);
   const [vote, setVote] = useState<"up" | "down" | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [compareVisible, setCompareVisible] = useState(false);
 
-  const W = Dimensions.get("window").width;
-  const CARD_PAD = 22;
-  const CARD_INNER_PAD = 18;
-  const carouselWidth = W - CARD_PAD * 2 - CARD_INNER_PAD * 2;
+  if (!authorized) return null;
 
-  const scrollRef = useRef<ScrollView>(null);
+  const uploadedSource = imageUri ? { uri: imageUri } : DEMO_UPLOAD_IMAGE;
 
-  const goTo = (idx: number) => {
-    const next = Math.max(0, Math.min(idx, slides.length - 1));
-    setActiveIndex(next);
-    scrollRef.current?.scrollTo({ x: next * carouselWidth, animated: true });
-  };
+  const referenceSource = referenceImageUri
+    ? { uri: referenceImageUri }
+    : (referenceId ? DEMO_IMAGES[referenceId] : undefined);
+
+  async function handleVote(direction: "up" | "down") {
+    const next = vote === direction ? null : direction;
+    setVote(next);
+    if (next === null) return;
+    if (!queryId || !referenceId) return;
+    setSubmitting(true);
+    try {
+      await submitFeedback(queryId, referenceId, next === "up");
+    } catch {
+      Alert.alert("Error", "Failed to submit feedback. Please try again.");
+      setVote(vote);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.page}>
-        <View style={styles.card}>
-          <View style={styles.topBar}>
-            <Pressable onPress={() => router.back()} style={styles.topBarBtn}>
-              <Text style={styles.backArrow}>‹</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable style={styles.headerBtn} onPress={() => router.back()}>
+          <MaterialCommunityIcons name="arrow-left" size={22} color={D.onPrimary} />
+        </Pressable>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Similar Case · Match #{matchId ?? "—"}</Text>
+          <Text style={styles.headerSubtitle}>
+            {user?.fullName ?? "—"} · {displayRole(user?.role)}
+          </Text>
+        </View>
+        <View style={styles.headerRight}>
+          <Pressable
+            style={styles.headerBtn}
+            onPress={() => router.push("/profile")}
+          >
+            <MaterialCommunityIcons
+              name="account-circle-outline"
+              size={22}
+              color={D.onPrimary}
+            />
+          </Pressable>
+          <Pressable
+            style={styles.headerBtnAlt}
+            onPress={() => {
+              clearAuth();
+              router.replace("/");
+            }}
+          >
+            <Text style={styles.headerBtnAltText}>Logout</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={styles.page}>
+          {/* Image comparison section */}
+          <View style={styles.comparisonSection}>
+            <View style={styles.comparisonHeader}>
+              <Text style={styles.sectionLabel}>Image Comparison</Text>
+            </View>
+
+            {/* Compact thumbnail preview */}
+            <View style={styles.thumbnailRow}>
+              <View style={styles.thumbnailPanel}>
+                <Image
+                  source={uploadedSource}
+                  style={styles.thumbnail}
+                  contentFit="cover"
+                />
+                <Text style={styles.thumbnailLabel}>Your Image</Text>
+              </View>
+              <View style={styles.thumbnailDivider} />
+              <View style={styles.thumbnailPanel}>
+                <Image
+                  source={referenceSource ?? undefined}
+                  style={styles.thumbnail}
+                  contentFit="cover"
+                />
+                <Text style={styles.thumbnailLabel}>Case Match</Text>
+              </View>
+            </View>
+
+            {/* Expand button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.expandBtn,
+                pressed && styles.expandBtnPressed,
+              ]}
+              onPress={() => setCompareVisible(true)}
+            >
+              <MaterialCommunityIcons
+                name="arrow-expand"
+                size={17}
+                color={D.onPrimary}
+              />
+              <Text style={styles.expandText}>Full Comparison</Text>
             </Pressable>
-
-            <Text style={styles.doctor}>Dr. Quach (PCP)</Text>
-
-            <Pressable onPress={() => router.replace("/")} style={styles.logoutBtn}>
-              <Text style={styles.logout}>Logout</Text>
-            </Pressable>
           </View>
 
-          <View style={styles.titlePill}>
-            <Text style={styles.titlePillText}>
-              Similar Case: Match #{matchId ?? "__"}
-            </Text>
-          </View>
-
-          <View style={styles.carouselWrap}>
-            <View style={styles.carouselRow}>
-              <Pressable
-                style={[styles.navBtn, activeIndex === 0 && styles.navBtnDisabled]}
-                onPress={() => goTo(activeIndex - 1)}
-                disabled={activeIndex === 0}
-              >
-                <Text style={styles.navBtnText}>‹</Text>
-              </Pressable>
-
-              <ScrollView
-                ref={scrollRef}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                snapToInterval={carouselWidth}
-                decelerationRate="fast"
-                bounces={false}
-                scrollEventThrottle={16}
-                onMomentumScrollEnd={(e) => {
-                  const x = e.nativeEvent.contentOffset.x;
-                  const idx = Math.round(x / carouselWidth);
-                  setActiveIndex(Math.max(0, Math.min(idx, slides.length - 1)));
-                }}
-                style={{ width: carouselWidth }}
-              >
-                {slides.map((item) => (
-                  <View key={item.key} style={[styles.slide, { width: carouselWidth }]}>
-                    <Text style={styles.slideIcon}>🖼️</Text>
-                    <Text style={styles.slideLabel}>{item.label}</Text>
-                  </View>
-                ))}
-              </ScrollView>
-
-              <Pressable
-                style={[
-                  styles.navBtn,
-                  activeIndex === slides.length - 1 && styles.navBtnDisabled,
-                ]}
-                onPress={() => goTo(activeIndex + 1)}
-                disabled={activeIndex === slides.length - 1}
-              >
-                <Text style={styles.navBtnText}>›</Text>
-              </Pressable>
+          {/* Diagnosis and similarity */}
+          <View style={styles.metaRow}>
+            <View style={styles.metaCard}>
+              <MaterialCommunityIcons
+                name="stethoscope"
+                size={18}
+                color={D.primary}
+              />
+              <View style={styles.metaCardContent}>
+                <Text style={styles.metaCardLabel}>Diagnosis</Text>
+                <Text style={styles.metaCardValue} numberOfLines={2}>
+                  {diagnosis ?? "—"}
+                </Text>
+              </View>
             </View>
-
-            <View style={styles.dots}>
-              {slides.map((s, i) => (
-                <Pressable key={s.key} onPress={() => goTo(i)} hitSlop={8}>
-                  <View
-                    style={[
-                      styles.dot,
-                      i === activeIndex ? styles.dotActive : styles.dotIdle,
-                    ]}
-                  />
-                </Pressable>
-              ))}
-            </View>
-
-            {Platform.OS === "web" ? (
-              <Text style={styles.webHint}>Tip: use ‹ › buttons or click dots</Text>
-            ) : null}
-          </View>
-
-          <View style={styles.pills}>
-            <View style={styles.diagPill}>
-              <Text style={styles.pillText}>Diagnosis: ____________</Text>
-            </View>
-            <View style={styles.simPill}>
-              <Text style={styles.pillText}>__ % Similarity</Text>
+            <View style={styles.metaCard}>
+              <MaterialCommunityIcons
+                name="chart-bar"
+                size={18}
+                color={D.primary}
+              />
+              <View style={styles.metaCardContent}>
+                <Text style={styles.metaCardLabel}>Similarity</Text>
+                <Text style={styles.metaCardValue}>
+                  {similarity != null ? `${similarity}%` : "—"}
+                </Text>
+              </View>
             </View>
           </View>
 
-          <View style={styles.feedbackBox}>
+          {/* Feedback */}
+          <View style={styles.feedbackSection}>
+            <Text style={styles.sectionLabel}>Clinical Feedback</Text>
             <Text style={styles.feedbackQuestion}>
-              Does this match help with{"\n"}your clinical assessment?
+              Does this match assist with your clinical assessment?
             </Text>
 
             <View style={styles.voteRow}>
               <Pressable
-                style={[styles.voteBtn, vote === "up" && styles.voteBtnActive]}
-                onPress={() => setVote(vote === "up" ? null : "up")}
+                style={[styles.voteBtn, vote === "up" && styles.voteBtnUp]}
+                onPress={() => handleVote("up")}
+                disabled={submitting}
               >
-                <Text style={styles.voteIcon}>👍</Text>
-                <Text style={styles.voteLabel}>Helpful</Text>
+                <MaterialCommunityIcons
+                  name={vote === "up" ? "thumb-up" : "thumb-up-outline"}
+                  size={24}
+                  color={vote === "up" ? D.onPrimary : D.primary}
+                />
+                <Text
+                  style={[
+                    styles.voteLabel,
+                    vote === "up" && styles.voteLabelActive,
+                  ]}
+                >
+                  Helpful
+                </Text>
               </Pressable>
 
               <Pressable
-                style={[styles.voteBtn, vote === "down" && styles.voteBtnActive]}
-                onPress={() => setVote(vote === "down" ? null : "down")}
+                style={[
+                  styles.voteBtn,
+                  vote === "down" && styles.voteBtnDown,
+                ]}
+                onPress={() => handleVote("down")}
+                disabled={submitting}
               >
-                <Text style={styles.voteIcon}>👎</Text>
-                <Text style={styles.voteLabel}>Not Helpful</Text>
+                <MaterialCommunityIcons
+                  name={vote === "down" ? "thumb-down" : "thumb-down-outline"}
+                  size={24}
+                  color={vote === "down" ? D.onPrimary : D.muted}
+                />
+                <Text
+                  style={[
+                    styles.voteLabel,
+                    vote === "down" && styles.voteLabelActive,
+                    vote === "down" && styles.voteLabelDown,
+                  ]}
+                >
+                  Not Helpful
+                </Text>
               </Pressable>
             </View>
+
+            {submitting && (
+              <Text style={styles.statusText}>Saving feedback…</Text>
+            )}
+            {!submitting && vote !== null && (
+              <View style={styles.statusRow}>
+                <MaterialCommunityIcons
+                  name="check-circle-outline"
+                  size={14}
+                  color={D.success}
+                />
+                <Text style={styles.statusSuccess}>Feedback recorded</Text>
+              </View>
+            )}
           </View>
         </View>
-      </View>
+      </ScrollView>
+
+      <ComparisonModal
+        visible={compareVisible}
+        onClose={() => setCompareVisible(false)}
+        uploadedSource={uploadedSource}
+        referenceSource={referenceSource}
+        uploadedSublabel="Patient Upload"
+        referenceSublabel={diagnosis ?? undefined}
+      />
     </SafeAreaView>
   );
 }
 
-const c = {
-  primary: "#118AB2",
-  border: "#69B5D3",
-  light: "#CFEFFC",
-  soft: "#D9EEF7",
-  text: "#0B2B3A",
-  mid: "#77BFE0",
-};
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#FFFFFF" },
-  page: { flex: 1, justifyContent: "center", paddingHorizontal: 22 },
-  card: {
-    borderWidth: 2,
-    borderColor: c.border,
-    borderRadius: 32,
-    backgroundColor: "#FFFFFF",
-    padding: 18,
-  },
+  safe: { flex: 1, backgroundColor: D.bg },
 
-  topBar: {
-    height: 60,
-    backgroundColor: c.primary,
-    borderRadius: 20,
-    paddingHorizontal: 12,
+  header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
+    backgroundColor: D.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 8,
   },
-  topBarBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  backArrow: { color: "#FFF", fontSize: 28, fontWeight: "900" },
-  doctor: { color: "#FFF", fontSize: 14, fontWeight: "800" },
-  logoutBtn: {
+  headerBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: D.onPrimaryOverlay,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerCenter: { flex: 1, alignItems: "center" },
+  headerTitle: { color: D.onPrimary, fontWeight: "700", fontSize: 17 },
+  headerSubtitle: { color: D.onPrimaryMuted, fontSize: 11, fontWeight: "500" },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerBtnAlt: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: D.onPrimaryOverlay,
   },
-  logout: { color: "#FFF", fontWeight: "800" },
+  headerBtnAltText: { color: D.onPrimary, fontWeight: "600", fontSize: 13 },
 
-  titlePill: {
-    borderWidth: 2,
-    borderColor: c.border,
+  scroll: { flexGrow: 1 },
+  page: {
+    padding: 20,
+    gap: 16,
+    maxWidth: 600,
+    alignSelf: "center",
+    width: "100%",
+  },
+
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: D.text,
+    letterSpacing: 0.3,
+  },
+
+  // Comparison section
+  comparisonSection: {
+    backgroundColor: D.surface,
     borderRadius: 16,
-    paddingVertical: 12,
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  titlePillText: { color: c.primary, fontWeight: "900" },
-
-  carouselWrap: { alignItems: "center", marginBottom: 10 },
-  carouselRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-
-  slide: {
-    height: 300,
-    backgroundColor: c.soft,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  slideIcon: { fontSize: 44, opacity: 0.55, marginBottom: 8 },
-  slideLabel: { color: c.primary, fontWeight: "900" },
-
-  dots: { flexDirection: "row", gap: 8, marginTop: 10 },
-  dot: { width: 10, height: 10, borderRadius: 999 },
-  dotActive: { backgroundColor: c.primary },
-  dotIdle: { backgroundColor: "#A9D8EC" },
-
-  webHint: {
-    marginTop: 8,
-    fontSize: 12,
-    color: "#2C6A80",
-    fontWeight: "600",
-  },
-
-  navBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: c.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  navBtnDisabled: { opacity: 0.35 },
-  navBtnText: { color: "#FFF", fontSize: 22, fontWeight: "900" },
-
-  pills: { alignItems: "center", gap: 10, marginTop: 8, marginBottom: 14 },
-  diagPill: {
-    backgroundColor: c.primary,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    width: "90%",
-    alignItems: "center",
-  },
-  simPill: {
-    backgroundColor: c.mid,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    width: "55%",
-    alignItems: "center",
-  },
-  pillText: { color: "#FFF", fontWeight: "900" },
-
-  feedbackBox: {
-    borderWidth: 2,
-    borderColor: c.border,
-    borderRadius: 20,
     padding: 14,
+    borderWidth: 1.5,
+    borderColor: D.border,
+    gap: 12,
+  },
+  comparisonHeader: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+  },
+  thumbnailRow: {
+    flexDirection: "row",
+    height: 140,
+    gap: 0,
+  },
+  thumbnailPanel: {
+    flex: 1,
+    gap: 6,
+  },
+  thumbnail: {
+    flex: 1,
+    borderRadius: 10,
+    backgroundColor: D.bg,
+    borderWidth: 1,
+    borderColor: D.border,
+  },
+  thumbnailLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: D.muted,
+    textAlign: "center",
+  },
+  thumbnailDivider: {
+    width: 1,
+    backgroundColor: D.border,
+    marginHorizontal: 8,
+    marginBottom: 22, // below the label area
+  },
+  expandBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: D.primary,
+    borderRadius: 10,
+    paddingVertical: 11,
+  },
+  expandBtnPressed: { opacity: 0.85 },
+  expandText: {
+    color: D.onPrimary,
+    fontWeight: "700",
+    fontSize: 14,
+  },
+
+  // Meta
+  metaRow: { flexDirection: "row", gap: 12 },
+  metaCard: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: D.surface,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: D.border,
+  },
+  metaCardContent: { flex: 1 },
+  metaCardLabel: {
+    fontSize: 11,
+    color: D.muted,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  metaCardValue: { fontSize: 14, color: D.text, fontWeight: "700" },
+
+  // Feedback
+  feedbackSection: {
+    backgroundColor: D.surface,
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: D.border,
+    gap: 12,
   },
   feedbackQuestion: {
-    color: c.primary,
-    fontWeight: "900",
-    textAlign: "center",
-    marginBottom: 12,
+    fontSize: 13,
+    color: D.muted,
+    fontWeight: "500",
+    lineHeight: 18,
   },
-  voteRow: { flexDirection: "row", gap: 16 },
+
+  voteRow: { flexDirection: "row", gap: 12 },
   voteBtn: {
-    width: 120,
-    backgroundColor: c.soft,
-    borderRadius: 18,
-    paddingVertical: 14,
+    flex: 1,
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "transparent",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: D.border,
+    backgroundColor: D.bg,
   },
-  voteBtnActive: {
-    borderColor: c.primary,
-    backgroundColor: c.light,
-  },
-  voteIcon: { fontSize: 26, marginBottom: 6 },
-  voteLabel: { color: c.primary, fontWeight: "900" },
+  voteBtnUp: { backgroundColor: D.primary, borderColor: D.primary },
+  voteBtnDown: { backgroundColor: D.danger, borderColor: D.danger },
+  voteLabel: { color: D.primary, fontWeight: "700", fontSize: 13 },
+  voteLabelActive: { color: D.onPrimary },
+  voteLabelDown: { color: D.onPrimary },
+
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  statusText: { fontSize: 12, color: D.muted, fontWeight: "600" },
+  statusSuccess: { fontSize: 12, color: D.success, fontWeight: "600" },
 });

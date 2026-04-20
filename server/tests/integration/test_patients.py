@@ -4,7 +4,6 @@ Integration tests for GET /api/v1/patients/{patient_id}.
 TDD — red until patients endpoint + Patient model + audit log are implemented.
 """
 
-import pytest
 
 PATIENTS_URL = "/api/v1/patients"
 

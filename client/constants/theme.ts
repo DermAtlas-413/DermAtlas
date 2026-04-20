@@ -27,6 +27,29 @@ export const Colors = {
   },
 };
 
+export const DermAtlasColors = {
+  primary:   "#0D6E8A",
+  bg:        "#EEF6FA",
+  surface:   "#FFFFFF",
+  border:    "#B8D9E8",
+  text:      "#1A3340",
+  muted:     "#7A9EB0",
+
+  success:      "#10B981",
+  successBg:    "#D1FAE5",
+  warning:      "#F59E0B",
+  warningBg:    "#FEF3C7",
+  danger:       "#E63946",
+  dangerBg:     "#FEE2E2",
+
+  infoSurface:  "#E0F0F7",
+  barTrack:     "#E2EBF0",
+
+  onPrimary:        "#FFFFFF",
+  onPrimaryMuted:   "rgba(255,255,255,0.75)",
+  onPrimaryOverlay: "rgba(255,255,255,0.15)",
+} as const;
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */

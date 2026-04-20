@@ -4,7 +4,6 @@ Integration tests for POST /api/v1/feedback.
 TDD — red until feedback endpoint + RecommendationFeedback model exist.
 """
 
-import pytest
 
 from tests.fixtures.test_data import feedback_payload
 

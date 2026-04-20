@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -6,101 +6,162 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
-
-type Match = {
-  id: string;
-  similarity: number;
-  diagnosis: string;
-};
-
-const MOCK_MATCHES: Match[] = [
-  { id: "1", similarity: 87, diagnosis: "Seborrheic keratosis" },
-  { id: "2", similarity: 82, diagnosis: "Benign nevus" },
-  { id: "3", similarity: 78, diagnosis: "Actinic keratosis" },
-  { id: "4", similarity: 74, diagnosis: "Basal cell carcinoma" },
-];
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useAuthStore } from "@/state/auth-store";
+import { useCurrentCaseStore } from "@/state/current-case-store";
+import { useRequireRole } from "@/hooks/use-require-role";
+import { analyzeLesion } from "@/services/lesion-service";
+import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
+import { VisibilityToggle } from "@/components/visibility-toggle";
+import type { AnalyzeMatch } from "@/types/api";
+import { displayRole } from "@/types/api";
+import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Compare() {
+  const authorized = useRequireRole("PCP");
   const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+  const { queryId } = useLocalSearchParams<{ queryId?: string }>();
+  const patientName = useCurrentCaseStore((s) => s.patientName);
+  const patientMrn = useCurrentCaseStore((s) => s.patientMrn);
+  const patientId = useCurrentCaseStore((s) => s.patientId);
+  const imageUri = useCurrentCaseStore((s) => s.imageUri);
+  const setFeedbackTarget = useCurrentCaseStore((s) => s.setFeedbackTarget);
+  const [matches, setMatches] = useState<AnalyzeMatch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const patientLabel = patientName || patientMrn || (patientId ? `ID # ${patientId}` : "—");
+
+  useEffect(() => {
+    if (!authorized) return;
+    setError(null);
+    analyzeLesion(queryId ?? "mock")
+      .then((res) => setMatches(res.results))
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
+      })
+      .finally(() => setLoading(false));
+  }, [queryId, authorized]);
+
+  if (!authorized) return null;
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.page}>
-        <View style={styles.card}>
-          {/* Top Bar */}
-          <View style={styles.topBar}>
-            <Pressable onPress={() => router.back()} style={styles.topBarBtn}>
-              <Text style={styles.backArrow}>‹</Text>
-            </Pressable>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable style={styles.headerBtn} onPress={() => router.back()}>
+          <MaterialCommunityIcons name="arrow-left" size={22} color={D.onPrimary} />
+        </Pressable>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Analysis Results</Text>
+          <Text style={styles.headerSubtitle}>
+            {user?.fullName ?? "—"} · {displayRole(user?.role)}
+          </Text>
+        </View>
+        <View style={styles.headerRight}>
+          <Pressable
+            style={styles.headerBtn}
+            onPress={() => router.push("/profile")}
+          >
+            <MaterialCommunityIcons
+              name="account-circle-outline"
+              size={22}
+              color={D.onPrimary}
+            />
+          </Pressable>
+          <Pressable
+            style={styles.headerBtnAlt}
+            onPress={() => {
+              clearAuth();
+              router.replace("/");
+            }}
+          >
+            <Text style={styles.headerBtnAltText}>Logout</Text>
+          </Pressable>
+        </View>
+      </View>
 
-            <Text style={styles.doctor}>Dr. Quach (PCP)</Text>
-
-            <Pressable onPress={() => router.replace("/")} style={styles.logoutBtn}>
-              <Text style={styles.logout}>Logout</Text>
-            </Pressable>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={styles.page}>
+          {/* Patient strip */}
+          <View style={styles.patientStrip}>
+            <MaterialCommunityIcons
+              name="card-account-details-outline"
+              size={14}
+              color={D.primary}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.patientText}>Patient: {patientLabel}</Text>
+              {patientMrn && patientName ? (
+                <Text style={styles.patientMeta}>{patientMrn} · ID #{patientId}</Text>
+              ) : patientId ? (
+                <Text style={styles.patientMeta}>ID #{patientId}</Text>
+              ) : null}
+            </View>
           </View>
 
-          {/* Patient ID pill */}
-          <View style={styles.patientPill}>
-            <Text style={styles.patientPillText}>Patient ID # ______</Text>
+          {/* Patient visibility toggle */}
+          {queryId && (
+            <VisibilityToggle queryId={queryId} />
+          )}
+
+          {/* Submitted image */}
+          <View style={styles.imageSection}>
+            <Text style={styles.sectionLabel}>Submitted Image</Text>
+            <View style={styles.imageCard}>
+              <Image
+                source={imageUri ? { uri: imageUri } : DEMO_UPLOAD_IMAGE}
+                style={styles.submittedImage}
+                contentFit="cover"
+              />
+            </View>
           </View>
 
-          {/* Uploaded image panel */}
-          <View style={styles.uploadPanel}>
-            <Text style={styles.imageIcon}>🖼️</Text>
-            <Text style={styles.uploadedLabel}>[Uploaded Image]</Text>
-          </View>
+          {/* Error banner */}
+          {error && (
+            <View style={styles.errorBanner}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={18} color={D.danger} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
 
-          {/* Zoom / Pan buttons */}
-          <View style={styles.actionsRow}>
-            <Pressable style={styles.actionBtn} onPress={() => {}}>
-              <Text style={styles.actionBtnText}>🔍  Zoom</Text>
-            </Pressable>
-            <Pressable style={styles.actionBtn} onPress={() => {}}>
-              <Text style={styles.actionBtnText}>✥  Pan</Text>
-            </Pressable>
-          </View>
-
-          {/* Similar cases header */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionHeaderText}>Similar Cases:</Text>
-          </View>
-
-          {/* Grid */}
-          <View style={styles.grid}>
-            {MOCK_MATCHES.map((m) => (
-              <Pressable
-                key={m.id}
-                style={styles.matchCard}
-                onPress={() => router.push(`/feedback?matchId=${m.id}`)}
-              >
-                <View style={styles.matchImage}>
-                  <Text style={styles.matchIcon}>🖼️</Text>
-                  <Text style={styles.matchLabel}>[Match {m.id}]</Text>
-                </View>
-
-                <View style={styles.metaRow}>
-                  <View style={styles.simPill}>
-                    <Text style={styles.simPillText}>— {m.similarity}% Similarity</Text>
-                  </View>
-
-                  <View style={styles.voteRow}>
-                    <Pressable hitSlop={8} onPress={() => {}}>
-                      <Text style={styles.voteIcon}>👍</Text>
-                    </Pressable>
-                    <Pressable hitSlop={8} onPress={() => {}}>
-                      <Text style={styles.voteIcon}>👎</Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                <View style={styles.diagRow}>
-                  <Text style={styles.diagText}>Diagnosis: {m.diagnosis}</Text>
-                </View>
-              </Pressable>
-            ))}
+          {/* Similar cases */}
+          <View>
+            <Text style={styles.sectionLabel}>
+              Similar Cases &nbsp;
+              <Text style={styles.sectionCount}>
+                {matches.length} matches
+              </Text>
+            </Text>
+            {loading ? (
+              <ActivityIndicator size="large" color={D.primary} style={{ marginTop: 20 }} />
+            ) : (
+            <View style={styles.grid}>
+              {matches.map((m) => (
+                <MatchCard
+                  key={m.reference_id}
+                  m={m}
+                  onPress={() => {
+                    const similarity = Math.round(m.score * 100);
+                    setFeedbackTarget({
+                      matchId: m.reference_id,
+                      referenceId: m.reference_id,
+                      diagnosis: m.diagnosis_label ?? "",
+                      similarity,
+                      referenceImageUri: m.gcs_uri ?? "",
+                    });
+                    router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
+                  }}
+                />
+              ))}
+            </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -108,139 +169,257 @@ export default function Compare() {
   );
 }
 
-const c = {
-  primary: "#118AB2",
-  border: "#69B5D3",
-  light: "#CFEFFC",
-  soft: "#D9EEF7",
-  text: "#0B2B3A",
-};
+function MatchCard({
+  m,
+  onPress,
+}: {
+  m: AnalyzeMatch;
+  onPress: () => void;
+}) {
+  const [imgError, setImgError] = useState(false);
+  const similarity = Math.round(m.score * 100);
+  const imgSource = imgError
+    ? null
+    : m.gcs_uri
+    ? { uri: m.gcs_uri }
+    : (DEMO_IMAGES[m.reference_id] ?? null);
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.matchCard,
+        pressed && styles.matchCardPressed,
+      ]}
+      onPress={onPress}
+    >
+      <View style={styles.matchImage}>
+        {imgSource ? (
+          <Image
+            source={imgSource}
+            style={styles.matchImageFill}
+            contentFit="cover"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <MaterialCommunityIcons
+            name="image-off-outline"
+            size={32}
+            color={D.border}
+          />
+        )}
+      </View>
+
+      <View style={styles.matchBody}>
+        <View style={styles.matchTopRow}>
+          <SimilarityBadge value={similarity} />
+          <View style={styles.voteRow}>
+            <Pressable hitSlop={8} onPress={() => {}}>
+              <MaterialCommunityIcons
+                name="thumb-up-outline"
+                size={15}
+                color={D.muted}
+              />
+            </Pressable>
+            <Pressable hitSlop={8} onPress={() => {}}>
+              <MaterialCommunityIcons
+                name="thumb-down-outline"
+                size={15}
+                color={D.muted}
+              />
+            </Pressable>
+          </View>
+        </View>
+
+        <SimilarityBar value={similarity} />
+
+        <Text style={styles.matchDiag} numberOfLines={2}>
+          {m.diagnosis_label ?? "Unknown"}
+        </Text>
+
+        <View style={styles.viewMoreRow}>
+          <Text style={styles.viewMoreText}>View details</Text>
+          <MaterialCommunityIcons
+            name="chevron-right"
+            size={13}
+            color={D.primary}
+          />
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function SimilarityBar({ value }: { value: number }) {
+  const color =
+    value >= 85 ? D.success : value >= 75 ? D.warning : D.danger;
+  return (
+    <View style={bar.wrap}>
+      <View
+        style={[bar.fill, { width: `${value}%` as `${number}%`, backgroundColor: color }]}
+      />
+    </View>
+  );
+}
+
+function SimilarityBadge({ value }: { value: number }) {
+  const color =
+    value >= 85 ? D.success : value >= 75 ? D.warning : D.danger;
+  const bg =
+    value >= 85 ? D.successBg : value >= 75 ? D.warningBg : D.dangerBg;
+  return (
+    <View style={[bar.badge, { backgroundColor: bg }]}>
+      <Text style={[bar.badgeText, { color }]}>{value}%</Text>
+    </View>
+  );
+}
+
+const bar = StyleSheet.create({
+  wrap: {
+    height: 4,
+    backgroundColor: D.barTrack,
+    borderRadius: 4,
+    marginVertical: 6,
+    overflow: "hidden",
+  },
+  fill: { height: "100%", borderRadius: 4 },
+  badge: {
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  badgeText: { fontSize: 11, fontWeight: "700" },
+});
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#FFFFFF" },
-  page: { paddingHorizontal: 22, paddingVertical: 18 },
-  card: {
-    borderWidth: 2,
-    borderColor: c.border,
-    borderRadius: 32,
-    backgroundColor: "#FFFFFF",
-    padding: 18,
-  },
+  safe: { flex: 1, backgroundColor: D.bg },
 
-  topBar: {
-    height: 60,
-    backgroundColor: c.primary,
-    borderRadius: 20,
-    paddingHorizontal: 12,
+  header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
+    backgroundColor: D.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 8,
   },
-  topBarBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  backArrow: { color: "#FFF", fontSize: 28, fontWeight: "900" },
-  doctor: { color: "#FFF", fontSize: 14, fontWeight: "800" },
-  logoutBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.18)",
-  },
-  logout: { color: "#FFF", fontWeight: "800" },
-
-  patientPill: {
-    alignSelf: "flex-start",
-    backgroundColor: c.primary,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: 10,
-  },
-  patientPillText: { color: "#FFF", fontWeight: "800", fontSize: 12 },
-
-  uploadPanel: {
-    backgroundColor: c.soft,
-    borderRadius: 20,
-    height: 190,
+  headerBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: D.onPrimaryOverlay,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
   },
-  imageIcon: { fontSize: 44, opacity: 0.55, marginBottom: 8 },
-  uploadedLabel: { color: c.primary, fontWeight: "900" },
-
-  actionsRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 12,
-  },
-  actionBtn: {
-    flex: 1,
-    backgroundColor: "#77BFE0",
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  actionBtnText: { color: "#FFF", fontWeight: "900" },
-
-  sectionHeader: {
-    alignSelf: "flex-start",
-    backgroundColor: c.primary,
-    borderRadius: 12,
+  headerCenter: { flex: 1, alignItems: "center" },
+  headerTitle: { color: D.onPrimary, fontWeight: "700", fontSize: 17 },
+  headerSubtitle: { color: D.onPrimaryMuted, fontSize: 11, fontWeight: "500" },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerBtnAlt: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    marginBottom: 12,
+    borderRadius: 8,
+    backgroundColor: D.onPrimaryOverlay,
   },
-  sectionHeaderText: { color: "#FFF", fontWeight: "900" },
+  headerBtnAltText: { color: D.onPrimary, fontWeight: "600", fontSize: 13 },
+
+  scroll: { flexGrow: 1 },
+  page: {
+    padding: 20,
+    gap: 16,
+    maxWidth: 700,
+    alignSelf: "center",
+    width: "100%",
+  },
+
+  patientStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: D.surface,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: D.border,
+  },
+  patientText: { color: D.text, fontSize: 13, fontWeight: "600" },
+  patientMeta: { color: D.muted, fontSize: 11, fontWeight: "500", marginTop: 2 },
+
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: D.dangerBg,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: D.danger,
+  },
+  errorText: { color: D.danger, fontSize: 13, fontWeight: "600", flex: 1 },
+
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: D.text,
+    letterSpacing: 0.3,
+    marginBottom: 10,
+  },
+  sectionCount: { color: D.muted, fontWeight: "500" },
+
+  imageSection: {},
+  imageCard: {
+    backgroundColor: D.surface,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: D.border,
+    height: 220,
+  },
+  submittedImage: {
+    width: "100%",
+    height: "100%",
+  },
 
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-between",
-    rowGap: 12,
+    gap: 12,
   },
-
   matchCard: {
     width: "48%",
-    backgroundColor: c.soft,
-    borderRadius: 18,
-    padding: 10,
+    backgroundColor: D.surface,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: D.border,
   },
+  matchCardPressed: { opacity: 0.85 },
   matchImage: {
-    height: 110,
-    backgroundColor: c.light,
-    borderRadius: 14,
+    height: 120,
+    backgroundColor: D.bg,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
+    gap: 4,
+    overflow: "hidden",
   },
-  matchIcon: { fontSize: 28, opacity: 0.6 },
-  matchLabel: { marginTop: 6, color: c.primary, fontWeight: "900", fontSize: 12 },
-
-  metaRow: {
+  matchImageFill: {
+    width: "100%",
+    height: "100%",
+  },
+  matchCaseId: { color: D.muted, fontSize: 11, fontWeight: "600" },
+  matchBody: { padding: 10, gap: 2 },
+  matchTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 6,
   },
-  simPill: {
-    flex: 1,
-    backgroundColor: "#77BFE0",
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    marginRight: 6,
+  voteRow: { flexDirection: "row", gap: 8 },
+  matchDiag: { color: D.text, fontSize: 12, fontWeight: "600" },
+  viewMoreRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
   },
-  simPillText: { color: "#FFF", fontWeight: "900", fontSize: 10 },
-
-  voteRow: { flexDirection: "row", gap: 6 },
-  voteIcon: { fontSize: 14 },
-
-  diagRow: {
-    backgroundColor: "#77BFE0",
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  diagText: { color: "#FFF", fontWeight: "900", fontSize: 10 },
+  viewMoreText: { color: D.primary, fontSize: 11, fontWeight: "600" },
 });

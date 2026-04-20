@@ -10,11 +10,33 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { login } from "@/services/auth-service";
+import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Index() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin() {
+    setError(null);
+    setLoading(true);
+    try {
+      const { user } = await login(username, password);
+      router.replace(user.role === "PATIENT" ? "/my-cases" : "/upload");
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error ? e.message : "Login failed. Please try again.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -22,151 +44,259 @@ export default function Index() {
         style={styles.safe}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={styles.page}>
-          <View style={styles.card}>
-            <View style={styles.logoCircle}>
-              <Image
-                source={require("../assets/images/dermatlas_icon.png")}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-            </View>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.page}>
+            <View style={styles.card}>
+              {/* Logo */}
+              <View style={styles.logoWrap}>
+                <View style={styles.logoCircle}>
+                  <Image
+                    source={require("../assets/images/dermatlas_icon.png")}
+                    style={styles.logo}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={styles.appName}>DermAtlas</Text>
+                <Text style={styles.tagline}>Clinical Imaging Platform</Text>
+              </View>
 
-            <Text style={styles.title}>Sign In</Text>
+              {/* Form */}
+              <View style={styles.form}>
+                <Text style={styles.formTitle}>Sign In</Text>
 
-            <View style={styles.form}>
-              <TextInput
-                value={username}
-                onChangeText={setUsername}
-                placeholder="Username"
-                placeholderTextColor={stylesVars.placeholder}
-                autoCapitalize="none"
-                style={styles.input}
-              />
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Password"
-                placeholderTextColor={stylesVars.placeholder}
-                secureTextEntry
-                style={styles.input}
-              />
-              <Pressable
-              style={styles.button}
-              onPress={() => router.replace("/upload")}>
-                <Text>Login</Text>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Username</Text>
+                  <View
+                    style={[
+                      styles.inputWrap,
+                      focusedField === "username" && styles.inputWrapFocused,
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="account-outline"
+                      size={18}
+                      color={
+                        focusedField === "username" ? D.primary : D.muted
+                      }
+                    />
+                    <TextInput
+                      value={username}
+                      onChangeText={setUsername}
+                      placeholder="Enter your username"
+                      placeholderTextColor={D.muted}
+                      autoCapitalize="none"
+                      style={styles.input}
+                      onFocus={() => setFocusedField("username")}
+                      onBlur={() => setFocusedField(null)}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Password</Text>
+                  <View
+                    style={[
+                      styles.inputWrap,
+                      focusedField === "password" && styles.inputWrapFocused,
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="lock-outline"
+                      size={18}
+                      color={
+                        focusedField === "password" ? D.primary : D.muted
+                      }
+                    />
+                    <TextInput
+                      value={password}
+                      onChangeText={setPassword}
+                      placeholder="Enter your password"
+                      placeholderTextColor={D.muted}
+                      secureTextEntry
+                      style={styles.input}
+                      onFocus={() => setFocusedField("password")}
+                      onBlur={() => setFocusedField(null)}
+                    />
+                  </View>
+                </View>
+
+                {error ? (
+                  <View style={styles.errorBanner}>
+                    <MaterialCommunityIcons
+                      name="alert-circle-outline"
+                      size={16}
+                      color={D.danger}
+                    />
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.button,
+                    loading && styles.buttonDisabled,
+                    pressed && !loading && styles.buttonPressed,
+                  ]}
+                  onPress={handleLogin}
+                  disabled={loading}
+                >
+                  <Text style={styles.buttonText}>
+                    {loading ? "Signing In…" : "Sign In"}
+                  </Text>
+                  {!loading ? (
+                    <MaterialCommunityIcons
+                      name="arrow-right"
+                      size={20}
+                      color={D.onPrimary}
+                    />
+                  ) : null}
                 </Pressable>
 
-              <Pressable onPress={() => {}}>
-                <Text style={styles.link}>Forgot Password?</Text>
-              </Pressable>
-            </View>
+                <Pressable onPress={() => {}} style={styles.forgotWrap}>
+                  <Text style={styles.forgotText}>Forgot Password?</Text>
+                </Pressable>
+              </View>
 
-            <Text style={styles.footer}>
-              For clinical use by authorized medical staff only.
-            </Text>
+              <View style={styles.footer}>
+                <MaterialCommunityIcons
+                  name="shield-check-outline"
+                  size={14}
+                  color={D.primary}
+                />
+                <Text style={styles.footerText}>
+                  For clinical use by authorized medical staff only
+                </Text>
+              </View>
+            </View>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const stylesVars = {
-  primary: "#118AB2",
-  border: "#69B5D3",
-  lightBlue: "#CFEFFC",
-  bg: "#FFFFFF",
-  pageBg: "#FFFFFF",
-  placeholder: "#67AFCB",
-  text: "#0B2B3A",
-};
-
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: stylesVars.pageBg,
-  },
+  safe: { flex: 1, backgroundColor: D.bg },
+  scroll: { flexGrow: 1 },
   page: {
     flex: 1,
     justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 24,
+    paddingVertical: 32,
   },
   card: {
-    backgroundColor: stylesVars.bg,
-    borderWidth: 2,
-    borderColor: stylesVars.border,
-    borderRadius: 32,
-    paddingTop: 36,
-    paddingBottom: 22,
-    paddingHorizontal: 22,
-    alignItems: "center",
+    backgroundColor: D.surface,
+    borderRadius: 24,
+    padding: 28,
+    width: "100%",
+    maxWidth: 440,
+    shadowColor: D.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
   },
+
+  logoWrap: { alignItems: "center", marginBottom: 28 },
   logoCircle: {
-    width: 170,
-    height: 170,
-    borderRadius: 999,
-    backgroundColor: stylesVars.lightBlue,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: D.bg,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 18,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: D.border,
   },
-  logo: {
-    width: 120,
-    height: 120,
-  },
-  title: {
-    fontSize: 44,
+  logo: { width: 58, height: 58 },
+  appName: {
+    fontSize: 26,
     fontWeight: "800",
-    color: stylesVars.primary,
-    marginBottom: 22,
-    letterSpacing: 0.3,
+    color: D.primary,
+    letterSpacing: 0.5,
   },
-  form: {
-    width: "100%",
-    gap: 16,
+  tagline: { fontSize: 12, color: D.muted, marginTop: 3, fontWeight: "500" },
+
+  form: { gap: 14 },
+  formTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: D.text,
+    marginBottom: 2,
+  },
+
+  fieldGroup: { gap: 5 },
+  fieldLabel: { fontSize: 13, fontWeight: "600", color: D.text },
+  inputWrap: {
+    flexDirection: "row",
     alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: D.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: D.bg,
+    gap: 10,
+  },
+  inputWrapFocused: {
+    borderColor: D.primary,
+    backgroundColor: D.surface,
   },
   input: {
-    width: "100%",
-    borderWidth: 2,
-    borderColor: stylesVars.border,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: stylesVars.text,
-    backgroundColor: "#FFFFFF",
+    flex: 1,
+    fontSize: 15,
+    color: D.text,
   },
+
   button: {
-    width: "100%",
-    backgroundColor: stylesVars.primary,
-    borderRadius: 18,
-    paddingVertical: 16,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: D.primary,
+    borderRadius: 14,
+    paddingVertical: 15,
+    gap: 8,
     marginTop: 4,
   },
-  buttonText: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "800",
-  },
-  link: {
-    color: stylesVars.primary,
-    fontSize: 14,
-    fontWeight: "700",
-    textDecorationLine: "underline",
-    marginTop: 2,
-  },
-  footer: {
-    marginTop: 18,
-    backgroundColor: stylesVars.lightBlue,
+  buttonPressed: { opacity: 0.85 },
+  buttonDisabled: { opacity: 0.6 },
+  buttonText: { color: D.onPrimary, fontSize: 16, fontWeight: "700" },
+
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: D.dangerBg,
+    borderRadius: 10,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    color: "#2C6A80",
+    borderWidth: 1,
+    borderColor: D.danger,
+  },
+  errorText: { color: D.danger, fontSize: 13, fontWeight: "600", flex: 1 },
+
+  forgotWrap: { alignItems: "center" },
+  forgotText: { color: D.primary, fontSize: 13, fontWeight: "600" },
+
+  footer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: D.bg,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginTop: 22,
+  },
+  footerText: {
+    color: D.primary,
     fontSize: 11,
-    textAlign: "center",
-    width: "100%",
+    fontWeight: "500",
+    flex: 1,
   },
 });
