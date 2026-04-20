@@ -61,7 +61,7 @@ def upgrade() -> None:
             "is_admin",
             sa.Boolean(),
             nullable=False,
-            server_default=sa.text("0"),  # SQLite boolean as int; works on PG/MySQL too
+            server_default=sa.false(),
         ),
     )
 
@@ -88,7 +88,7 @@ def upgrade() -> None:
         ).first()
     if admin_row is not None:
         bind.execute(
-            sa.text("UPDATE users SET is_admin = 1 WHERE user_id = :uid"),
+            sa.text("UPDATE users SET is_admin = true WHERE user_id = :uid"),
             {"uid": admin_row[0]},
         )
 
