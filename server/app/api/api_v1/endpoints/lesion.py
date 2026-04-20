@@ -115,9 +115,10 @@ async def analyze_lesion(
         logger.exception("Vertex AI vector search failed")
         raise HTTPException(status_code=503, detail="Vector search service unavailable")
 
-    # --- Cap results and enrich with atlas metadata ---
-    neighbors = neighbors[:_MAX_RESULTS]
-    results: list[AnalysisResult] = []
+    # --- Enrich neighbors with atlas metadata, partition into benign/malignant ---
+    _TOP_PER_CATEGORY = 5
+    benign_results: list[AnalysisResult] = []
+    malignant_results: list[AnalysisResult] = []
     neighbor_distances: list[float] = []
     retrieved_case_ids: list[str] = []
 
@@ -138,14 +139,18 @@ async def analyze_lesion(
         neighbor_distances.append(dist)
         retrieved_case_ids.append(n.id)
 
-        results.append(
-            AnalysisResult(
-                reference_id=n.id,
-                diagnosis_label=ref.diagnosis_label if ref else None,
-                score=dist,
-                gcs_uri=image_url,
-            )
+        result = AnalysisResult(
+            reference_id=n.id,
+            diagnosis_label=ref.diagnosis_label if ref else None,
+            diagnosis_type=ref.diagnosis_type if ref else None,
+            score=dist,
+            gcs_uri=image_url,
         )
+        dtype = (ref.diagnosis_type or "").strip().lower() if ref else ""
+        if dtype == "malignant" and len(malignant_results) < _TOP_PER_CATEGORY:
+            malignant_results.append(result)
+        elif dtype == "benign" and len(benign_results) < _TOP_PER_CATEGORY:
+            benign_results.append(result)
 
     # --- Fetch patient demographics for XGBoost features ---
     patient_result = await db.execute(
@@ -202,7 +207,8 @@ async def analyze_lesion(
     await db.flush()
 
     return AnalyzeResponse(
-        results=results,
+        benign_results=benign_results,
+        malignant_results=malignant_results,
         predicted_probs=ml_result.predicted_probs,
         malignancy_probability=ml_result.malignancy_probability,
         risk_flag=ml_result.risk_flag,

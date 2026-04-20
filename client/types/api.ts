@@ -29,6 +29,7 @@ export interface UploadResponse {
 export interface AnalyzeMatch {
   reference_id: string;
   diagnosis_label: string | null;
+  diagnosis_type: string | null;
   score: number;
   gcs_uri: string | null;
 }
@@ -47,7 +48,8 @@ export const DIAGNOSIS_LABELS: Record<DiagnosisClass, string> = {
 export const MALIGNANT_CLASSES: DiagnosisClass[] = ["mel", "bcc", "akiec"];
 
 export interface AnalyzeResponse {
-  results: AnalyzeMatch[];
+  benign_results: AnalyzeMatch[];
+  malignant_results: AnalyzeMatch[];
   predicted_probs: Record<DiagnosisClass, number>;
   malignancy_probability: number;
   risk_flag: boolean;
