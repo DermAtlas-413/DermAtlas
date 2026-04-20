@@ -18,9 +18,12 @@ from app.core.deps import require_pcp
 from app.db import get_db
 from app.models.audit_log import AuditLog
 from app.models.clinical_image import ClinicalImage
+from app.models.clinical_image_prediction import ClinicalImagePrediction
+from app.models.patient import Patient
 from app.models.reference_atlas import ReferenceAtlas
 from app.models.user import User
 from app.schemas.analyze import AnalyzeRequest, AnalyzeResponse, AnalysisResult
+from app.services.ml_service import run_inference
 
 logger = logging.getLogger(__name__)
 
@@ -115,13 +118,15 @@ async def analyze_lesion(
     # --- Cap results and enrich with atlas metadata ---
     neighbors = neighbors[:_MAX_RESULTS]
     results: list[AnalysisResult] = []
+    neighbor_distances: list[float] = []
+    retrieved_case_ids: list[str] = []
+
     for n in neighbors:
         ref_result = await db.execute(
             select(ReferenceAtlas).where(ReferenceAtlas.reference_id == n.id)
         )
         ref = ref_result.scalar_one_or_none()
 
-        # Generate a signed URL so the browser can load the image directly
         image_url: str | None = None
         if ref and ref.gcs_image_uri:
             try:
@@ -129,14 +134,62 @@ async def analyze_lesion(
             except Exception:
                 logger.warning("Failed to sign URL for %s", ref.gcs_image_uri)
 
+        dist = float(n.distance) if n.distance is not None else 0.0
+        neighbor_distances.append(dist)
+        retrieved_case_ids.append(n.id)
+
         results.append(
             AnalysisResult(
                 reference_id=n.id,
                 diagnosis_label=ref.diagnosis_label if ref else None,
-                score=float(n.distance) if n.distance is not None else 0.0,
+                score=dist,
                 gcs_uri=image_url,
             )
         )
+
+    # --- Fetch patient demographics for XGBoost features ---
+    patient_result = await db.execute(
+        select(Patient).where(Patient.patient_id == image.patient_id)
+    )
+    patient = patient_result.scalar_one_or_none()
+
+    age: float | None = None
+    if patient and patient.date_of_birth:
+        try:
+            from datetime import date
+            dob = date.fromisoformat(patient.date_of_birth)
+            age = float((date.today() - dob).days / 365.25)
+        except Exception:
+            pass
+
+    sex = patient.gender if patient else None
+    localization = image.lesion_location if image.lesion_location != "unspecified" else None
+
+    # --- Run ML inference (MLP + XGBoost) ---
+    try:
+        ml_result = run_inference(
+            embedding=embedding,
+            neighbor_distances=neighbor_distances,
+            age=age,
+            sex=sex,
+            localization=localization,
+        )
+    except Exception:
+        logger.exception("ML inference failed for query %s", payload.query_id)
+        raise HTTPException(status_code=503, detail="ML inference service unavailable")
+
+    # --- Persist prediction record ---
+    db.add(ClinicalImagePrediction(
+        query_id=payload.query_id,
+        model_version="mlp_v1+xgb_v1",
+        predicted_probs=ml_result.predicted_probs,
+        risk_flag=ml_result.risk_flag,
+        primary_diagnosis=ml_result.primary_diagnosis,
+        mel_probability=ml_result.predicted_probs.get("mel", 0.0),
+        bcc_probability=ml_result.predicted_probs.get("bcc", 0.0),
+        retrieved_case_ids=retrieved_case_ids,
+        inference_time_ms=ml_result.inference_time_ms,
+    ))
 
     # --- Audit log ---
     db.add(
@@ -148,4 +201,10 @@ async def analyze_lesion(
     )
     await db.flush()
 
-    return AnalyzeResponse(results=results)
+    return AnalyzeResponse(
+        results=results,
+        predicted_probs=ml_result.predicted_probs,
+        malignancy_probability=ml_result.malignancy_probability,
+        risk_flag=ml_result.risk_flag,
+        primary_diagnosis=ml_result.primary_diagnosis,
+    )

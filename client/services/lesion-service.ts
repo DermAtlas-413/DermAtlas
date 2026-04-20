@@ -10,6 +10,10 @@ const MOCK_RESULTS: AnalyzeResponse = {
     { reference_id: "3", diagnosis_label: "Actinic keratosis", score: 0.78, gcs_uri: null },
     { reference_id: "4", diagnosis_label: "Basal cell carcinoma", score: 0.74, gcs_uri: null },
   ],
+  predicted_probs: { mel: 0.08, nv: 0.55, bcc: 0.06, akiec: 0.12, bkl: 0.14, df: 0.05 },
+  malignancy_probability: 0.26,
+  risk_flag: false,
+  primary_diagnosis: "nv",
 };
 
 const STATUS_MESSAGES: Record<number, string> = {

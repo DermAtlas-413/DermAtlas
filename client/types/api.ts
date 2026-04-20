@@ -33,8 +33,25 @@ export interface AnalyzeMatch {
   gcs_uri: string | null;
 }
 
+export type DiagnosisClass = "mel" | "nv" | "bcc" | "akiec" | "bkl" | "df";
+
+export const DIAGNOSIS_LABELS: Record<DiagnosisClass, string> = {
+  mel: "Melanoma",
+  nv: "Nevus",
+  bcc: "Basal Cell Carcinoma",
+  akiec: "Actinic Keratosis",
+  bkl: "Benign Keratosis",
+  df: "Dermatofibroma",
+};
+
+export const MALIGNANT_CLASSES: DiagnosisClass[] = ["mel", "bcc", "akiec"];
+
 export interface AnalyzeResponse {
   results: AnalyzeMatch[];
+  predicted_probs: Record<DiagnosisClass, number>;
+  malignancy_probability: number;
+  risk_flag: boolean;
+  primary_diagnosis: DiagnosisClass;
 }
 
 // POST /feedback

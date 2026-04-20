@@ -14,7 +14,7 @@ from pgvector.sqlalchemy import Vector
 
 # revision identifiers, used by Alembic.
 revision: str = 'b7c3d8e21fa9'
-down_revision: Union[str, Sequence[str], None] = 'a602b6610fd8'
+down_revision: Union[str, Sequence[str], None] = 'c4d8e3f2a719'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
