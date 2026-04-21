@@ -158,6 +158,15 @@ export default function Index() {
                 <Pressable onPress={() => {}} style={styles.forgotWrap}>
                   <Text style={styles.forgotText}>Forgot Password?</Text>
                 </Pressable>
+
+                <Pressable
+                  onPress={() => router.push("/register" as never)}
+                  style={styles.forgotWrap}
+                >
+                  <Text style={styles.forgotText}>
+                    Register a new hospital
+                  </Text>
+                </Pressable>
               </View>
 
               <View style={styles.footer}>

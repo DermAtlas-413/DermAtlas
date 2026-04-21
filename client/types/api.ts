@@ -12,6 +12,24 @@ export interface UserInfo {
   email: string;
   fullName: string;
   role: UserRole;
+  networkId: number | null;
+  isAdmin: boolean;
+}
+
+export interface Network {
+  network_id: number;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
+// POST /auth/register-network
+export interface RegisterNetworkPayload {
+  network_name: string;
+  admin_email: string;
+  admin_password: string;
+  admin_full_name: string;
+  admin_npi: string;
 }
 
 // POST /auth/token
@@ -34,9 +52,27 @@ export interface AnalyzeMatch {
   gcs_uri: string | null;
 }
 
+export type DiagnosisClass = "mel" | "nv" | "bcc" | "akiec" | "bkl" | "df";
+
+export const DIAGNOSIS_LABELS: Record<DiagnosisClass, string> = {
+  mel: "Melanoma",
+  nv: "Nevus",
+  bcc: "Basal Cell Carcinoma",
+  akiec: "Actinic Keratosis",
+  bkl: "Benign Keratosis",
+  df: "Dermatofibroma",
+};
+
+export const MALIGNANT_CLASSES: DiagnosisClass[] = ["mel", "bcc", "akiec"];
+
 export interface AnalyzeResponse {
   benign_results: AnalyzeMatch[];
   malignant_results: AnalyzeMatch[];
+  predicted_probs: Record<DiagnosisClass, number>;
+  malignancy_probability: number;
+  risk_flag: boolean;
+  primary_diagnosis: DiagnosisClass;
+  believability_score: number | null;
 }
 
 // POST /feedback

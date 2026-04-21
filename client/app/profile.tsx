@@ -105,8 +105,8 @@ export default function Profile() {
             </View>
           </View>
 
-          {/* Admin section — PCP only */}
-          {user?.role === "PCP" && (
+          {/* Admin section — network admins only */}
+          {user?.role === "PCP" && user?.isAdmin && (
             <View style={styles.menuGroup}>
               <SectionHeader title="Administrator Controls" />
               <View style={styles.menuCard}>

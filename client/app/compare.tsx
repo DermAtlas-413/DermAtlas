@@ -17,8 +17,8 @@ import { useRequireRole } from "@/hooks/use-require-role";
 import { analyzeLesion } from "@/services/lesion-service";
 import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
 import { VisibilityToggle } from "@/components/visibility-toggle";
-import type { AnalyzeMatch } from "@/types/api";
-import { displayRole } from "@/types/api";
+import type { AnalyzeMatch, AnalyzeResponse, DiagnosisClass } from "@/types/api";
+import { displayRole, DIAGNOSIS_LABELS, MALIGNANT_CLASSES } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
 
 export default function Compare() {
@@ -34,6 +34,7 @@ export default function Compare() {
   const setFeedbackTarget = useCurrentCaseStore((s) => s.setFeedbackTarget);
   const [benignMatches, setBenignMatches] = useState<AnalyzeMatch[]>([]);
   const [malignantMatches, setMalignantMatches] = useState<AnalyzeMatch[]>([]);
+  const [mlResult, setMlResult] = useState<AnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +47,7 @@ export default function Compare() {
       .then((res) => {
         setBenignMatches(res.benign_results);
         setMalignantMatches(res.malignant_results);
+        setMlResult(res);
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
@@ -140,24 +142,11 @@ export default function Compare() {
             <ActivityIndicator size="large" color={D.primary} style={{ marginTop: 20 }} />
           ) : (
             <>
-              <MatchSection
-                title="Closest Benign Matches"
-                accent={D.success}
-                accentBg={D.successBg}
-                matches={benignMatches}
-                emptyHint="No close benign matches in the atlas"
-                onPressMatch={(m) => {
-                  const similarity = Math.round(m.score * 100);
-                  setFeedbackTarget({
-                    matchId: m.reference_id,
-                    referenceId: m.reference_id,
-                    diagnosis: m.diagnosis_label ?? "",
-                    similarity,
-                    referenceImageUri: m.gcs_uri ?? "",
-                  });
-                  router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
-                }}
-              />
+              {/* ML Risk Assessment */}
+              {mlResult && (
+                <MLResultPanel result={mlResult} />
+              )}
+
               <MatchSection
                 title="Closest Malignant Matches"
                 accent={D.danger}
@@ -176,11 +165,85 @@ export default function Compare() {
                   router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
                 }}
               />
+              <MatchSection
+                title="Closest Benign Matches"
+                accent={D.success}
+                accentBg={D.successBg}
+                matches={benignMatches}
+                emptyHint="No close benign matches in the atlas"
+                onPressMatch={(m) => {
+                  const similarity = Math.round(m.score * 100);
+                  setFeedbackTarget({
+                    matchId: m.reference_id,
+                    referenceId: m.reference_id,
+                    diagnosis: m.diagnosis_label ?? "",
+                    similarity,
+                    referenceImageUri: m.gcs_uri ?? "",
+                  });
+                  router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
+                }}
+              />
             </>
           )}
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function MLResultPanel({ result }: { result: AnalyzeResponse }) {
+  const riskColor = result.risk_flag ? D.danger : D.success;
+  const riskBg = result.risk_flag ? D.dangerBg : D.successBg;
+  const riskLabel = result.risk_flag ? "High Malignancy Risk" : "Low Malignancy Risk";
+  const malPct = Math.round(result.malignancy_probability * 100);
+
+  return (
+    <View style={ml.container}>
+      {/* Risk banner */}
+      <View style={[ml.riskBanner, { backgroundColor: riskBg, borderColor: riskColor }]}>
+        <MaterialCommunityIcons
+          name={result.risk_flag ? "alert-circle" : "check-circle"}
+          size={20}
+          color={riskColor}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={[ml.riskLabel, { color: riskColor }]}>{riskLabel}</Text>
+          <Text style={[ml.riskSub, { color: riskColor }]}>
+            Malignancy probability: {malPct}%
+          </Text>
+        </View>
+      </View>
+
+      {/* Probability distribution */}
+      <Text style={ml.subheading}>Diagnosis Probability</Text>
+      {(Object.entries(result.predicted_probs) as [DiagnosisClass, number][])
+        .sort(([, a], [, b]) => b - a)
+        .map(([cls, prob]) => {
+          const isMal = MALIGNANT_CLASSES.includes(cls);
+          const barColor = isMal ? D.danger : D.success;
+          const pct = Math.round(prob * 100);
+          return (
+            <View key={cls} style={ml.probRow}>
+              <Text style={ml.probLabel}>{DIAGNOSIS_LABELS[cls]}</Text>
+              <View style={ml.probBarTrack}>
+                <View style={[ml.probBarFill, { width: `${pct}%` as `${number}%`, backgroundColor: barColor }]} />
+              </View>
+              <Text style={[ml.probPct, { color: isMal ? D.danger : D.text }]}>{pct}%</Text>
+            </View>
+          );
+        })}
+
+      {/* Believability */}
+      <View style={ml.believabilityRow}>
+        <MaterialCommunityIcons name="star-half-full" size={14} color={D.muted} />
+        <Text style={ml.believabilityText}>
+          Believability:{" "}
+          {result.believability_score !== null && result.believability_score !== undefined
+            ? `${Math.round(result.believability_score * 100)}%`
+            : "building confidence…"}
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -327,6 +390,74 @@ function SimilarityBadge({ value }: { value: number }) {
     </View>
   );
 }
+
+const ml = StyleSheet.create({
+  container: {
+    backgroundColor: D.surface,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: D.border,
+    padding: 16,
+    gap: 12,
+  },
+  riskBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  riskLabel: { fontWeight: "700", fontSize: 14 },
+  riskSub: { fontSize: 12, fontWeight: "500", marginTop: 2 },
+  subheading: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: D.text,
+    letterSpacing: 0.3,
+    marginTop: 4,
+  },
+  probRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  probLabel: {
+    width: 150,
+    fontSize: 12,
+    fontWeight: "500",
+    color: D.text,
+  },
+  probBarTrack: {
+    flex: 1,
+    height: 6,
+    backgroundColor: D.barTrack,
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  probBarFill: { height: "100%", borderRadius: 4 },
+  probPct: {
+    width: 36,
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+  believabilityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: D.border,
+  },
+  believabilityText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: D.muted,
+  },
+});
 
 const bar = StyleSheet.create({
   wrap: {
