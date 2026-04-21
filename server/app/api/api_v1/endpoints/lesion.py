@@ -8,7 +8,7 @@ import vertexai
 from google.cloud import aiplatform
 from vertexai.vision_models import Image, MultiModalEmbeddingModel
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from google.cloud import storage as gcs_storage
@@ -209,7 +209,7 @@ async def analyze_lesion(
                 func.count().label("total"),
                 func.sum(
                     RecommendationFeedback.is_helpful.cast(
-                        __import__("sqlalchemy").Integer
+                        Integer
                     )
                 ).label("helpful"),
             ).where(

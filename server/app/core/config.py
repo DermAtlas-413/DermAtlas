@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     GCS_BUCKET_NAME: str = ""
     VERTEX_AI_INDEX_ENDPOINT: str = ""
 
+    # ML model artifacts (GCS)
+    GCS_ML_BUCKET: str = "dermatlas-ml-data"
+    MLP_MODEL_GCS_PATH: str = "processed/mlp_final.pt"
+    MLP_CONFIG_GCS_PATH: str = "processed/mlp_config.json"
+    XGB_MODEL_GCS_PATH: str = "processed/xgboost_model.json"
+    XGB_THRESHOLD_GCS_PATH: str = "processed/xgb_threshold.json"
+    XGB_ENCODER_GCS_PATH: str = "processed/xgb_encoder.json"
+
     # CORS — comma-separated list of allowed frontend origins
     ALLOWED_ORIGINS: str = ""
 
