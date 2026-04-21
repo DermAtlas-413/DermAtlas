@@ -16,10 +16,12 @@ from google.cloud import storage as gcs_storage
 from app.core.config import get_settings
 from app.core.deps import require_pcp
 from app.db import get_db
+from sqlalchemy import func
 from app.models.audit_log import AuditLog
 from app.models.clinical_image import ClinicalImage
 from app.models.clinical_image_prediction import ClinicalImagePrediction
 from app.models.patient import Patient
+from app.models.recommendation_feedback import RecommendationFeedback
 from app.models.reference_atlas import ReferenceAtlas
 from app.models.user import User
 from app.schemas.analyze import AnalyzeRequest, AnalyzeResponse, AnalysisResult
@@ -196,6 +198,31 @@ async def analyze_lesion(
         inference_time_ms=ml_result.inference_time_ms,
     ))
 
+    # --- Physician feedback-based believability score ---
+    # For each retrieved neighbor, check how often physicians marked it helpful.
+    # believability = malignancy_probability × physician_agreement_rate
+    # Falls back to malignancy_probability alone if no feedback exists yet.
+    believability_score: float | None = None
+    if retrieved_case_ids:
+        feedback_result = await db.execute(
+            select(
+                func.count().label("total"),
+                func.sum(
+                    RecommendationFeedback.is_helpful.cast(
+                        __import__("sqlalchemy").Integer
+                    )
+                ).label("helpful"),
+            ).where(
+                RecommendationFeedback.reference_id.in_(retrieved_case_ids)
+            )
+        )
+        row = feedback_result.one()
+        total = row.total or 0
+        helpful = row.helpful or 0
+        if total > 0:
+            agreement_rate = helpful / total
+            believability_score = round(ml_result.malignancy_probability * agreement_rate, 4)
+
     # --- Audit log ---
     db.add(
         AuditLog(
@@ -213,4 +240,5 @@ async def analyze_lesion(
         malignancy_probability=ml_result.malignancy_probability,
         risk_flag=ml_result.risk_flag,
         primary_diagnosis=ml_result.primary_diagnosis,
+        believability_score=believability_score,
     )

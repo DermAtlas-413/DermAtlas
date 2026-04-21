@@ -24,3 +24,4 @@ class AnalyzeResponse(BaseModel):
     malignancy_probability: float
     risk_flag: bool
     primary_diagnosis: str
+    believability_score: Optional[float] = None

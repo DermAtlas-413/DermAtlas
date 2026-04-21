@@ -17,6 +17,7 @@ const MOCK_RESULTS: AnalyzeResponse = {
   malignancy_probability: 0.26,
   risk_flag: false,
   primary_diagnosis: "nv",
+  believability_score: 0.18,
 };
 
 const STATUS_MESSAGES: Record<number, string> = {

@@ -54,6 +54,7 @@ export interface AnalyzeResponse {
   malignancy_probability: number;
   risk_flag: boolean;
   primary_diagnosis: DiagnosisClass;
+  believability_score: number | null;
 }
 
 // POST /feedback
