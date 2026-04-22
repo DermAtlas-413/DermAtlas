@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+from datetime import timedelta
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Path
+from google.cloud import storage as gcs_storage
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,13 +25,67 @@ from app.schemas.patient import (
     VisibilityUpdate,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+_gcs_client: gcs_storage.Client | None = None
+_signing_creds = None
+
+
+def _to_signed_url(gcs_uri: str | None) -> str:
+    """Convert a gs:// URI to a 1-hour signed HTTPS URL the browser can load.
+
+    Returns the original string when:
+    - URI is empty or None
+    - URI is not a gs:// scheme (already an HTTPS URL or a local path)
+    - GCS signing fails (e.g. local dev without ADC) — caller decides how to handle
+    """
+    if not gcs_uri or not gcs_uri.startswith("gs://"):
+        return gcs_uri or ""
+
+    try:
+        import google.auth
+        from google.auth.transport import requests as auth_requests
+
+        global _gcs_client, _signing_creds
+        if _gcs_client is None:
+            _gcs_client = gcs_storage.Client()
+        if _signing_creds is None:
+            _signing_creds, _ = google.auth.default()
+
+        if hasattr(_signing_creds, "refresh"):
+            _signing_creds.refresh(auth_requests.Request())
+
+        without_prefix = gcs_uri[5:]
+        slash_idx = without_prefix.find("/")
+        if slash_idx < 0:
+            return gcs_uri
+        bucket_name = without_prefix[:slash_idx]
+        blob_path = without_prefix[slash_idx + 1:]
+
+        bucket = _gcs_client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+
+        sa_email = getattr(_signing_creds, "service_account_email", None)
+        access_token = getattr(_signing_creds, "token", None)
+
+        return blob.generate_signed_url(
+            version="v4",
+            expiration=timedelta(hours=1),
+            method="GET",
+            service_account_email=sa_email,
+            access_token=access_token,
+        )
+    except Exception:
+        logger.exception("Failed to sign URL for %s", gcs_uri)
+        return gcs_uri
 
 
 def _image_summary(img: ClinicalImage) -> ClinicalImageSummary:
     return ClinicalImageSummary(
         query_id=img.query_id,
-        gcs_uri=img.gcs_image_uri,
+        gcs_uri=_to_signed_url(img.gcs_image_uri),
         captured_at=img.captured_at.isoformat() if img.captured_at else None,
         lesion_location=img.lesion_location,
         visible_to_patient=img.visible_to_patient,
@@ -122,7 +179,7 @@ async def get_my_case_detail(
 
     return ClinicalImageDetail(
         query_id=img.query_id,
-        gcs_uri=img.gcs_image_uri,
+        gcs_uri=_to_signed_url(img.gcs_image_uri),
         captured_at=img.captured_at.isoformat() if img.captured_at else None,
         lesion_location=img.lesion_location,
         clinician_notes=img.clinician_notes,
