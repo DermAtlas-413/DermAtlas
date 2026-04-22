@@ -9,7 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, require_pcp
+from sqlalchemy.orm import aliased
+
+from app.core.deps import get_current_user, require_network_admin, require_pcp
 from app.core.gcs import sign_gcs_uri
 from app.db import get_db
 from app.models.audit_log import AuditLog
@@ -17,10 +19,12 @@ from app.models.clinical_image import ClinicalImage
 from app.models.patient import Patient
 from app.models.user import User, UserRole
 from app.schemas.patient import (
+    AdminPatientOut,
     ClinicalImageDetail,
     ClinicalImageSummary,
     PatientMeResponse,
     PatientResponse,
+    ReassignPhysicianIn,
     VisibilityUpdate,
 )
 
@@ -244,4 +248,108 @@ async def get_patient(
         date_of_birth=patient.date_of_birth,
         gender=patient.gender,
         clinical_images=[_image_summary(img) for img in images],
+    )
+
+
+# ── Admin patient management (network-scoped) ────────────────────────
+
+
+@router.get("/admin/patients", response_model=List[AdminPatientOut])
+async def list_network_patients(
+    current_user: User = Depends(require_network_admin),
+    db: AsyncSession = Depends(get_db),
+) -> List[AdminPatientOut]:
+    """List every patient record in the admin's network, with current PCP."""
+    PCP = aliased(User)
+    PatientUser = aliased(User)
+    result = await db.execute(
+        select(Patient, PCP, PatientUser)
+        .join(PCP, PCP.user_id == Patient.primary_physician_id)
+        .outerjoin(PatientUser, PatientUser.user_id == Patient.user_id)
+        .where(PCP.network_id == current_user.network_id)
+        .order_by(Patient.patient_id)
+    )
+    return [
+        AdminPatientOut(
+            patient_id=patient.patient_id,
+            mrn_internal=patient.mrn_internal,
+            full_name=patient.full_name,
+            date_of_birth=patient.date_of_birth,
+            gender=patient.gender,
+            user_id=patient_user.user_id if patient_user else None,
+            patient_email=patient_user.email if patient_user else None,
+            primary_physician_id=pcp.user_id,
+            primary_physician_name=pcp.full_name,
+            primary_physician_email=pcp.email,
+        )
+        for patient, pcp, patient_user in result.all()
+    ]
+
+
+@router.patch("/admin/patients/{patient_id}/physician", response_model=AdminPatientOut)
+async def reassign_patient_physician(
+    payload: ReassignPhysicianIn,
+    patient_id: int = Path(..., ge=1),
+    current_user: User = Depends(require_network_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminPatientOut:
+    """Reassign a patient's primary physician. Both sides must be in-network."""
+    patient_result = await db.execute(
+        select(Patient).where(Patient.patient_id == patient_id)
+    )
+    patient = patient_result.scalar_one_or_none()
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    # The patient's current PCP must be in this admin's network.
+    current_pcp_result = await db.execute(
+        select(User).where(User.user_id == patient.primary_physician_id)
+    )
+    current_pcp = current_pcp_result.scalar_one_or_none()
+    if current_pcp is None or current_pcp.network_id != current_user.network_id:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    new_pcp_result = await db.execute(
+        select(User).where(User.user_id == payload.physician_id)
+    )
+    new_pcp = new_pcp_result.scalar_one_or_none()
+    if (
+        new_pcp is None
+        or new_pcp.role != UserRole.PCP
+        or new_pcp.network_id != current_user.network_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Target physician must be a PCP in your network",
+        )
+
+    patient.primary_physician_id = new_pcp.user_id
+
+    db.add(
+        AuditLog(
+            user_id=current_user.user_id,
+            action="REASSIGN_PATIENT",
+            target_resource=f"patient:{patient_id}->pcp:{new_pcp.user_id}",
+        )
+    )
+    await db.flush()
+
+    patient_user_result = await db.execute(
+        select(User).where(User.user_id == patient.user_id)
+    ) if patient.user_id else None
+    patient_user = (
+        patient_user_result.scalar_one_or_none() if patient_user_result else None
+    )
+
+    return AdminPatientOut(
+        patient_id=patient.patient_id,
+        mrn_internal=patient.mrn_internal,
+        full_name=patient.full_name,
+        date_of_birth=patient.date_of_birth,
+        gender=patient.gender,
+        user_id=patient_user.user_id if patient_user else None,
+        patient_email=patient_user.email if patient_user else None,
+        primary_physician_id=new_pcp.user_id,
+        primary_physician_name=new_pcp.full_name,
+        primary_physician_email=new_pcp.email,
     )

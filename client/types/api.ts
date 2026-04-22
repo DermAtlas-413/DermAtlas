@@ -123,3 +123,15 @@ export interface VisibilityToggleResponse {
   query_id: string;
   visible_to_patient: boolean;
 }
+
+// GET /users/me/cases
+export interface PcpCaseSummary {
+  query_id: string;
+  gcs_uri: string;
+  captured_at: string | null;
+  lesion_location: string;
+  visible_to_patient: boolean;
+  patient_id: number;
+  patient_name: string | null;
+  patient_mrn: string | null;
+}

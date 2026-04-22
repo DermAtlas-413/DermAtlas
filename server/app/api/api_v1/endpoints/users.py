@@ -9,9 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_password_hash
 from app.core.deps import require_network_admin, require_pcp
+from app.core.gcs import sign_gcs_uri
 from app.db import get_db
 from app.models.audit_log import AuditLog
+from app.models.clinical_image import ClinicalImage
+from app.models.patient import Patient
 from app.models.user import User, UserRole
+from app.schemas.patient import PcpCaseSummary
 
 router = APIRouter()
 
@@ -54,11 +58,48 @@ def _user_to_out(u: User) -> UserOut:
         is_admin=bool(u.is_admin),
         network_id=u.network_id,
         created_at=u.created_at.isoformat() if u.created_at else "",
-        last_login=None,
+        last_login=u.last_login_at.isoformat() if u.last_login_at else None,
     )
 
 
 # ---------- Endpoints ----------
+
+def _safe_sign(gcs_uri: str | None) -> str:
+    if not gcs_uri or not gcs_uri.startswith("gs://"):
+        return gcs_uri or ""
+    try:
+        return sign_gcs_uri(gcs_uri)
+    except Exception:
+        return ""
+
+
+@router.get("/users/me/cases", response_model=list[PcpCaseSummary])
+async def list_my_uploads(
+    current_user: User = Depends(require_pcp),
+    db: AsyncSession = Depends(get_db),
+) -> list[PcpCaseSummary]:
+    """Return all clinical images uploaded by the current PCP."""
+    result = await db.execute(
+        select(ClinicalImage, Patient)
+        .join(Patient, Patient.patient_id == ClinicalImage.patient_id)
+        .where(ClinicalImage.user_id == current_user.user_id)
+        .order_by(ClinicalImage.captured_at.desc())
+    )
+    rows = result.all()
+    return [
+        PcpCaseSummary(
+            query_id=img.query_id,
+            gcs_uri=_safe_sign(img.gcs_image_uri),
+            captured_at=img.captured_at.isoformat() if img.captured_at else None,
+            lesion_location=img.lesion_location,
+            visible_to_patient=img.visible_to_patient,
+            patient_id=patient.patient_id,
+            patient_name=patient.full_name,
+            patient_mrn=patient.mrn_internal,
+        )
+        for img, patient in rows
+    ]
+
 
 @router.get("/users", response_model=list[UserOut])
 async def list_users(

@@ -2,6 +2,7 @@ import type {
   ClinicalImageDetail,
   PatientMeResponse,
   PatientResponse,
+  PcpCaseSummary,
   VisibilityToggleResponse,
 } from "@/types/api";
 import { apiFetch, USE_MOCK, delay } from "./http";
@@ -120,6 +121,37 @@ export async function getMyCaseDetail(queryId: string): Promise<ClinicalImageDet
   }
 
   return apiFetch<ClinicalImageDetail>(`/patients/me/cases/${queryId}`);
+}
+
+const MOCK_PCP_UPLOADS: PcpCaseSummary[] = [
+  {
+    query_id: "mock-upload-1",
+    gcs_uri: "",
+    captured_at: "2026-04-10T14:30:00Z",
+    lesion_location: "Left forearm",
+    visible_to_patient: true,
+    patient_id: 1,
+    patient_name: "Alice Johnson",
+    patient_mrn: "MRN-2024-001",
+  },
+  {
+    query_id: "mock-upload-2",
+    gcs_uri: "",
+    captured_at: "2026-03-22T09:15:00Z",
+    lesion_location: "Upper back",
+    visible_to_patient: false,
+    patient_id: 2,
+    patient_name: "Bob Williams",
+    patient_mrn: "MRN-2024-002",
+  },
+];
+
+export async function getMyUploads(): Promise<PcpCaseSummary[]> {
+  if (USE_MOCK) {
+    await delay(300);
+    return MOCK_PCP_UPLOADS;
+  }
+  return apiFetch<PcpCaseSummary[]>("/users/me/cases");
 }
 
 export async function toggleCaseVisibility(

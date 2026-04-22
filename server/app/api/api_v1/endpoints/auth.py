@@ -1,6 +1,7 @@
 """POST /api/v1/auth/token — OAuth2 password flow."""
 
 import re
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -47,6 +48,8 @@ async def login(
 
     if user is None or not verify_password(str(password), user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    user.last_login_at = datetime.now(timezone.utc)
 
     token = create_access_token({
         "sub": str(user.user_id),
