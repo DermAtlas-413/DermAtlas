@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     GCP_PROJECT_ID: str = ""
     GCS_BUCKET_NAME: str = ""
     VERTEX_AI_INDEX_ENDPOINT: str = ""
+    VERTEX_AI_DEPLOYED_INDEX_ID: str = "dertmatlas_vector_search_1776740555044"
 
     # ML model artifacts (GCS)
     GCS_ML_BUCKET: str = "dermatlas-ml-data"

@@ -119,7 +119,7 @@ def _load_models() -> _Models:
 
         # Load threshold
         threshold_bytes = _download_bytes(client, bucket, settings.XGB_THRESHOLD_GCS_PATH)
-        threshold = float(json.loads(threshold_bytes)["threshold"])
+        threshold = float(json.loads(threshold_bytes)["malignancy_threshold"])
 
         # Load encoder (categorical mappings + cohort medians)
         encoder_bytes = _download_bytes(client, bucket, settings.XGB_ENCODER_GCS_PATH)

@@ -73,7 +73,7 @@ async def analyze_lesion(
             index_endpoint_name=settings.VERTEX_AI_INDEX_ENDPOINT
         )
         response = endpoint.find_neighbors(
-            deployed_index_id="dermatlas_index_v2",
+            deployed_index_id=settings.VERTEX_AI_DEPLOYED_INDEX_ID,
             queries=[embedding],
             num_neighbors=_VERTEX_NEIGHBORS,
         )
