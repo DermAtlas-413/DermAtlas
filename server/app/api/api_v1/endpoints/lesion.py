@@ -11,10 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, Integer, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from google.cloud import storage as gcs_storage
-
 from app.core.config import get_settings
 from app.core.deps import require_pcp
+from app.core.gcs import sign_gcs_uri
 from app.db import get_db
 from app.models.audit_log import AuditLog
 from app.models.clinical_image import ClinicalImage
@@ -32,39 +31,6 @@ router = APIRouter()
 
 _TOP_PER_CATEGORY = 5
 _VERTEX_NEIGHBORS = 25
-_gcs_client: gcs_storage.Client | None = None
-_signing_creds = None
-
-
-def _get_signed_url(gcs_uri: str) -> str:
-    """Generate a 1-hour signed URL for a GCS object."""
-    import google.auth
-    from google.auth.transport import requests as auth_requests
-    from datetime import timedelta
-
-    global _gcs_client, _signing_creds
-    if _gcs_client is None:
-        _gcs_client = gcs_storage.Client()
-    if _signing_creds is None:
-        _signing_creds, _ = google.auth.default()
-
-    if hasattr(_signing_creds, "refresh"):
-        _signing_creds.refresh(auth_requests.Request())
-
-    without_prefix = gcs_uri[5:]  # strip "gs://"
-    slash_idx = without_prefix.find("/")
-    bucket_name = without_prefix[:slash_idx]
-    blob_path = without_prefix[slash_idx + 1:]
-
-    bucket = _gcs_client.bucket(bucket_name)
-    blob = bucket.blob(blob_path)
-    return blob.generate_signed_url(
-        version="v4",
-        expiration=timedelta(hours=1),
-        method="GET",
-        service_account_email=_signing_creds.service_account_email,
-        access_token=_signing_creds.token,
-    )
 
 
 def _get_image_embedding(gcs_uri: str) -> list[float]:
@@ -130,7 +96,7 @@ async def analyze_lesion(
         image_url: str | None = None
         if ref and ref.gcs_image_uri:
             try:
-                image_url = _get_signed_url(ref.gcs_image_uri)
+                image_url = sign_gcs_uri(ref.gcs_image_uri)
             except Exception:
                 logger.warning("Failed to sign URL for %s", ref.gcs_image_uri)
 

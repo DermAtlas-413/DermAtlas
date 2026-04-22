@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Path
@@ -9,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, require_pcp
+from app.core.gcs import sign_gcs_uri
 from app.db import get_db
 from app.models.audit_log import AuditLog
 from app.models.clinical_image import ClinicalImage
@@ -22,13 +24,26 @@ from app.schemas.patient import (
     VisibilityUpdate,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+def _safe_sign(gcs_uri: str | None) -> str:
+    """Sign a gs:// URI; return empty string on failure or if not a gs:// URI."""
+    if not gcs_uri or not gcs_uri.startswith("gs://"):
+        return gcs_uri or ""
+    try:
+        return sign_gcs_uri(gcs_uri)
+    except Exception:
+        logger.warning("Failed to sign URL for %s", gcs_uri)
+        return ""
 
 
 def _image_summary(img: ClinicalImage) -> ClinicalImageSummary:
     return ClinicalImageSummary(
         query_id=img.query_id,
-        gcs_uri=img.gcs_image_uri,
+        gcs_uri=_safe_sign(img.gcs_image_uri),
         captured_at=img.captured_at.isoformat() if img.captured_at else None,
         lesion_location=img.lesion_location,
         visible_to_patient=img.visible_to_patient,
@@ -122,7 +137,7 @@ async def get_my_case_detail(
 
     return ClinicalImageDetail(
         query_id=img.query_id,
-        gcs_uri=img.gcs_image_uri,
+        gcs_uri=_safe_sign(img.gcs_image_uri),
         captured_at=img.captured_at.isoformat() if img.captured_at else None,
         lesion_location=img.lesion_location,
         clinician_notes=img.clinician_notes,
