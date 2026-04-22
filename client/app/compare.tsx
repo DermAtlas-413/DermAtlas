@@ -15,9 +15,15 @@ import { useAuthStore } from "@/state/auth-store";
 import { useCurrentCaseStore } from "@/state/current-case-store";
 import { useRequireRole } from "@/hooks/use-require-role";
 import { analyzeLesion } from "@/services/lesion-service";
+import { getMyUploads } from "@/services/patient-service";
 import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
 import { VisibilityToggle } from "@/components/visibility-toggle";
-import type { AnalyzeMatch, AnalyzeResponse, DiagnosisClass } from "@/types/api";
+import type {
+  AnalyzeMatch,
+  AnalyzeResponse,
+  DiagnosisClass,
+  PcpCaseSummary,
+} from "@/types/api";
 import { displayRole, DIAGNOSIS_LABELS, MALIGNANT_CLASSES } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
 
@@ -27,18 +33,43 @@ export default function Compare() {
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const { queryId } = useLocalSearchParams<{ queryId?: string }>();
-  const patientName = useCurrentCaseStore((s) => s.patientName);
-  const patientMrn = useCurrentCaseStore((s) => s.patientMrn);
-  const patientId = useCurrentCaseStore((s) => s.patientId);
-  const imageUri = useCurrentCaseStore((s) => s.imageUri);
+  const storePatientName = useCurrentCaseStore((s) => s.patientName);
+  const storePatientMrn = useCurrentCaseStore((s) => s.patientMrn);
+  const storePatientId = useCurrentCaseStore((s) => s.patientId);
+  const storeImageUri = useCurrentCaseStore((s) => s.imageUri);
   const setFeedbackTarget = useCurrentCaseStore((s) => s.setFeedbackTarget);
+  const [historicalCase, setHistoricalCase] = useState<PcpCaseSummary | null>(null);
   const [benignMatches, setBenignMatches] = useState<AnalyzeMatch[]>([]);
   const [malignantMatches, setMalignantMatches] = useState<AnalyzeMatch[]>([]);
   const [mlResult, setMlResult] = useState<AnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const patientLabel = patientName || patientMrn || (patientId ? `ID # ${patientId}` : "—");
+  // Prefer the in-memory store (populated by the upload flow); fall back to
+  // the backend-fetched case when the user navigates here from /my-uploads.
+  const patientName = storePatientName || historicalCase?.patient_name || null;
+  const patientMrn = storePatientMrn || historicalCase?.patient_mrn || null;
+  const patientId = storePatientId || historicalCase?.patient_id || null;
+  const imageUri = storeImageUri || historicalCase?.gcs_uri || null;
+
+  const patientLabel =
+    patientName || patientMrn || (patientId ? `ID # ${patientId}` : "—");
+
+  useEffect(() => {
+    if (!authorized) return;
+    // If we landed here via ?queryId= but don't have store data (e.g. from
+    // /my-uploads), pull the case detail so the header/image are populated.
+    if (queryId && !storePatientName) {
+      getMyUploads()
+        .then((cases) => {
+          const found = cases.find((c) => c.query_id === queryId);
+          if (found) setHistoricalCase(found);
+        })
+        .catch(() => {
+          // Non-fatal: the analyze call is what matters for the page.
+        });
+    }
+  }, [queryId, authorized, storePatientName]);
 
   useEffect(() => {
     if (!authorized) return;
