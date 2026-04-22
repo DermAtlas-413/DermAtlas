@@ -10,7 +10,10 @@ import {
   TextInput,
   Modal,
   Platform,
+  useWindowDimensions,
 } from "react-native";
+
+const DESKTOP_BREAKPOINT = 820;
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { DermAtlasColors as D } from "@/constants/theme";
@@ -25,6 +28,8 @@ import type { AdminPatient, AdminUser } from "@/types/admin";
 export default function ManagePatients() {
   const authorized = useRequireRole({ role: "PCP", adminOnly: true });
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= DESKTOP_BREAKPOINT;
   const [patients, setPatients] = useState<AdminPatient[]>([]);
   const [pcps, setPcps] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,7 +143,7 @@ export default function ManagePatients() {
             </View>
 
             <View style={styles.tableCard}>
-              {Platform.OS === "web" && (
+              {isDesktop && (
                 <View style={styles.tableHeader}>
                   <Text style={[styles.tableHeaderCell, { flex: 2 }]}>
                     Patient
@@ -168,6 +173,7 @@ export default function ManagePatients() {
                     key={p.patient_id}
                     patient={p}
                     isLast={idx === filtered.length - 1}
+                    isDesktop={isDesktop}
                     onReassign={() => setEditing(p)}
                   />
                 ))
@@ -191,21 +197,22 @@ export default function ManagePatients() {
 function PatientRow({
   patient,
   isLast,
+  isDesktop,
   onReassign,
 }: {
   patient: AdminPatient;
   isLast: boolean;
+  isDesktop: boolean;
   onReassign: () => void;
 }) {
-  const isWeb = Platform.OS === "web";
   return (
     <View
       style={[
-        isWeb ? styles.tableRow : styles.mobileRow,
+        isDesktop ? styles.tableRow : styles.mobileRow,
         !isLast && styles.rowBorder,
       ]}
     >
-      {isWeb ? (
+      {isDesktop ? (
         <>
           <View style={{ flex: 2, gap: 2 }}>
             <Text style={styles.patientName}>{patient.full_name}</Text>
@@ -247,8 +254,10 @@ function PatientRow({
         </>
       ) : (
         <View style={styles.mobileBody}>
-          <Text style={styles.patientName}>{patient.full_name}</Text>
-          <Text style={styles.patientEmail}>
+          <Text style={styles.patientName} numberOfLines={1}>
+            {patient.full_name}
+          </Text>
+          <Text style={styles.patientEmail} numberOfLines={2}>
             MRN {patient.mrn_internal}
             {patient.patient_email ? ` · ${patient.patient_email}` : ""}
           </Text>
@@ -258,7 +267,7 @@ function PatientRow({
               size={12}
               color={D.muted}
             />
-            <Text style={styles.pcpMobile}>
+            <Text style={styles.pcpMobile} numberOfLines={1}>
               {patient.primary_physician_name}
             </Text>
           </View>
@@ -448,7 +457,7 @@ const styles = StyleSheet.create({
   mobileRow: {
     padding: 14,
   },
-  mobileBody: { gap: 4 },
+  mobileBody: { gap: 4, minWidth: 0 },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: D.border },
   tableCell: { fontSize: 14, color: D.text },
 
@@ -461,7 +470,7 @@ const styles = StyleSheet.create({
     gap: 4,
     marginTop: 2,
   },
-  pcpMobile: { color: D.text, fontSize: 13, fontWeight: "500" },
+  pcpMobile: { color: D.text, fontSize: 13, fontWeight: "500", flex: 1 },
 
   reassignBtn: {
     flexDirection: "row",
