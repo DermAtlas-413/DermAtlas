@@ -43,8 +43,16 @@ export default function Profile() {
     router.push("/change-password");
   }
 
+  function handleMyUploads() {
+    router.push("/my-uploads");
+  }
+
   function handleManageUsers() {
     router.push("/admin/users");
+  }
+
+  function handleManagePatients() {
+    router.push("/admin/patients");
   }
 
   function handleAuditLogs() {
@@ -104,24 +112,38 @@ export default function Profile() {
               />
             </View>
           </View>
-
           {/* Inbox section - PCP only */}
+{user?.role === "PCP" && (
+  <View style={styles.menuGroup}>
+    <SectionHeader title="Communication" />
+    <View style={styles.menuCard}>
+      <MenuRow
+        icon="inbox-outline"
+        label="Inbox"
+        sublabel="View consultation requests"
+        onPress={() => router.push("/inbox")}
+      />
+    </View>
+  </View>
+)}
+
+          {/* PCP-only: previous uploads */}
           {user?.role === "PCP" && (
-          <View style={styles.menuGroup}>
-            <SectionHeader title="Communication" />
-            <View style={styles.menuCard}>
-              <MenuRow
-              icon="inbox-outline"
-              label="Inbox"
-              sublabel="View consultation requests"
-              onPress={() => router.push("/inbox")}
-              />
+            <View style={styles.menuGroup}>
+              <SectionHeader title="Clinical" />
+              <View style={styles.menuCard}>
+                <MenuRow
+                  icon="folder-image"
+                  label="My Uploaded Cases"
+                  sublabel="Review lesion images you have analyzed"
+                  onPress={handleMyUploads}
+                />
+              </View>
             </View>
-          </View>
           )}
-          
-          {/* Admin section — PCP only */}
-          {user?.role === "PCP" && (
+
+          {/* Admin section — network admins only */}
+          {user?.role === "PCP" && user?.isAdmin && (
             <View style={styles.menuGroup}>
               <SectionHeader title="Administrator Controls" />
               <View style={styles.menuCard}>
@@ -130,6 +152,13 @@ export default function Profile() {
                   label="Manage Users"
                   sublabel="Add, remove, or edit user accounts"
                   onPress={handleManageUsers}
+                />
+                <View style={styles.menuDivider} />
+                <MenuRow
+                  icon="account-switch-outline"
+                  label="Manage Patients"
+                  sublabel="Reassign patients to a different physician"
+                  onPress={handleManagePatients}
                 />
                 <View style={styles.menuDivider} />
                 <MenuRow

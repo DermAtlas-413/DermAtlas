@@ -23,3 +23,10 @@ cloud-sql-python-connector[asyncpg]>=1.7.0
 # Auth
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
+
+# ML & Vector Search
+pgvector>=0.2.4
+xgboost>=2.0.0
+scikit-learn>=1.3.0
+numpy>=1.24.0
+torch>=2.0.0

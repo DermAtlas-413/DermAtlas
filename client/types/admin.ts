@@ -50,3 +50,16 @@ export interface AuditLogParams {
   from?: string;
   to?: string;
 }
+
+export interface AdminPatient {
+  patient_id: number;
+  mrn_internal: string;
+  full_name: string;
+  date_of_birth: string;
+  gender: string;
+  user_id: number | null;
+  patient_email: string | null;
+  primary_physician_id: number;
+  primary_physician_name: string;
+  primary_physician_email: string;
+}

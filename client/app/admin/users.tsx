@@ -8,9 +8,9 @@ import {
   FlatList,
   TextInput,
   ActivityIndicator,
-  Alert,
   Platform,
   ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -24,16 +24,23 @@ import {
 } from "@/services/user-service";
 import { useRequireRole } from "@/hooks/use-require-role";
 import { UserFormModal } from "@/components/user-form-modal";
+import { ConfirmDestructiveModal } from "@/components/confirm-destructive-modal";
+
+const DESKTOP_BREAKPOINT = 820;
 
 export default function ManageUsers() {
-  const authorized = useRequireRole("PCP");
+  const authorized = useRequireRole({ role: "PCP", adminOnly: true });
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= DESKTOP_BREAKPOINT;
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [pendingDeactivate, setPendingDeactivate] = useState<AdminUser | null>(null);
+  const [deactivateError, setDeactivateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authorized) return;
@@ -82,43 +89,27 @@ export default function ManageUsers() {
   }
 
   function confirmDeactivate(user: AdminUser) {
-    Alert.alert(
-      "Deactivate User",
-      `Deactivate account for ${user.full_name}? They will lose access immediately.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Deactivate",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deactivateUser(user.user_id);
-              setUsers((prev) =>
-                prev.map((u) =>
-                  u.user_id === user.user_id ? { ...u, is_active: false } : u
-                )
-              );
-            } catch (err: unknown) {
-              Alert.alert("Error", err instanceof Error ? err.message : "Failed.");
-            }
-          },
-        },
-      ]
-    );
+    setDeactivateError(null);
+    setPendingDeactivate(user);
   }
 
-  function showMobileActions(user: AdminUser) {
-    const options: string[] = ["Edit"];
-    if (user.is_active) options.push("Deactivate");
-    options.push("Cancel");
-
-    Alert.alert(user.full_name, undefined, [
-      { text: "Edit", onPress: () => openEdit(user) },
-      ...(user.is_active
-        ? [{ text: "Deactivate", style: "destructive" as const, onPress: () => confirmDeactivate(user) }]
-        : []),
-      { text: "Cancel", style: "cancel" },
-    ]);
+  async function handleDeactivateConfirmed() {
+    if (!pendingDeactivate) return;
+    const user = pendingDeactivate;
+    try {
+      await deactivateUser(user.user_id);
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.user_id === user.user_id ? { ...u, is_active: false } : u
+        )
+      );
+      setPendingDeactivate(null);
+    } catch (err: unknown) {
+      setDeactivateError(
+        err instanceof Error ? err.message : "Failed to deactivate user."
+      );
+      setPendingDeactivate(null);
+    }
   }
 
   return (
@@ -133,7 +124,7 @@ export default function ManageUsers() {
             {users.length} user{users.length !== 1 ? "s" : ""}
           </Text>
         </View>
-        {Platform.OS === "web" ? (
+        {isDesktop ? (
           <Pressable style={styles.addBtnHeader} onPress={openCreate}>
             <MaterialCommunityIcons name="plus" size={16} color={D.onPrimary} />
             <Text style={styles.addBtnHeaderText}>Add User</Text>
@@ -156,7 +147,7 @@ export default function ManageUsers() {
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
-      ) : Platform.OS === "web" ? (
+      ) : isDesktop ? (
         <WebUserList
           users={filtered}
           search={search}
@@ -169,15 +160,26 @@ export default function ManageUsers() {
           users={filtered}
           search={search}
           onSearchChange={setSearch}
-          onActions={showMobileActions}
+          onEdit={openEdit}
+          onDeactivate={confirmDeactivate}
           onRefresh={loadUsers}
         />
       )}
 
-      {Platform.OS !== "web" && (
+      {!isDesktop && (
         <Pressable style={styles.fab} onPress={openCreate}>
           <MaterialCommunityIcons name="plus" size={26} color={D.onPrimary} />
         </Pressable>
+      )}
+
+      {deactivateError && (
+        <View style={styles.errorToast}>
+          <MaterialCommunityIcons name="alert-circle-outline" size={16} color={D.danger} />
+          <Text style={styles.errorToastText}>{deactivateError}</Text>
+          <Pressable onPress={() => setDeactivateError(null)}>
+            <MaterialCommunityIcons name="close" size={16} color={D.danger} />
+          </Pressable>
+        </View>
       )}
 
       <UserFormModal
@@ -185,6 +187,20 @@ export default function ManageUsers() {
         onClose={() => setModalVisible(false)}
         onSave={handleSave}
         existingUser={editingUser}
+      />
+
+      <ConfirmDestructiveModal
+        visible={pendingDeactivate !== null}
+        title="Deactivate User"
+        message={
+          pendingDeactivate
+            ? `You're about to deactivate ${pendingDeactivate.full_name} (${pendingDeactivate.email}). They will lose access immediately.`
+            : ""
+        }
+        finalWarning="This action revokes all active sessions and cannot be undone from this screen. You will need to reactivate the account manually."
+        confirmLabel="Deactivate"
+        onConfirm={handleDeactivateConfirmed}
+        onClose={() => setPendingDeactivate(null)}
       />
     </SafeAreaView>
   );
@@ -330,13 +346,15 @@ function MobileUserList({
   users,
   search,
   onSearchChange,
-  onActions,
+  onEdit,
+  onDeactivate,
   onRefresh,
 }: {
   users: AdminUser[];
   search: string;
   onSearchChange: (v: string) => void;
-  onActions: (u: AdminUser) => void;
+  onEdit: (u: AdminUser) => void;
+  onDeactivate: (u: AdminUser) => void;
   onRefresh: () => void;
 }) {
   const [refreshing, setRefreshing] = useState(false);
@@ -373,7 +391,7 @@ function MobileUserList({
         }
         renderItem={({ item }) => (
           <View style={styles.mobileCard}>
-            <View style={styles.mobileCardLeft}>
+            <View style={styles.mobileCardHeader}>
               <View style={styles.avatarMedium}>
                 <Text style={styles.avatarMediumText}>
                   {item.full_name
@@ -384,35 +402,60 @@ function MobileUserList({
                     .toUpperCase()}
                 </Text>
               </View>
-            </View>
-            <View style={styles.mobileCardBody}>
-              <View style={styles.mobileCardTopRow}>
-                <Text style={styles.mobileCardName}>{item.full_name}</Text>
-                <RoleBadge role={item.role} />
-              </View>
-              <Text style={styles.mobileCardEmail} numberOfLines={1}>
-                {item.email}
-              </Text>
-              <View style={styles.mobileCardBottomRow}>
-                <StatusBadge active={item.is_active} />
-                <Text style={styles.mobileCardLastLogin}>
-                  {item.last_login ? `Last: ${formatDate(item.last_login)}` : "Never logged in"}
+              <View style={styles.mobileCardBody}>
+                <Text style={styles.mobileCardName} numberOfLines={1}>
+                  {item.full_name}
+                </Text>
+                <Text style={styles.mobileCardEmail} numberOfLines={1}>
+                  {item.email}
                 </Text>
               </View>
             </View>
-            <Pressable
-              style={({ pressed }) => [
-                styles.moreBtn,
-                pressed && styles.moreBtnPressed,
-              ]}
-              onPress={() => onActions(item)}
-            >
-              <MaterialCommunityIcons
-                name="dots-vertical"
-                size={20}
-                color={D.muted}
-              />
-            </Pressable>
+
+            <View style={styles.mobileCardBadgeRow}>
+              <RoleBadge role={item.role} />
+              <StatusBadge active={item.is_active} />
+            </View>
+
+            <Text style={styles.mobileCardLastLogin}>
+              {item.last_login
+                ? `Last login: ${formatDate(item.last_login)}`
+                : "Never logged in"}
+            </Text>
+
+            <View style={styles.mobileCardActions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.mobileActionBtn,
+                  pressed && styles.iconBtnPressed,
+                ]}
+                onPress={() => onEdit(item)}
+              >
+                <MaterialCommunityIcons
+                  name="pencil-outline"
+                  size={15}
+                  color={D.primary}
+                />
+                <Text style={styles.mobileActionBtnText}>Edit</Text>
+              </Pressable>
+              {item.is_active && (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.mobileActionBtn,
+                    styles.mobileActionBtnDanger,
+                    pressed && styles.iconBtnPressed,
+                  ]}
+                  onPress={() => onDeactivate(item)}
+                >
+                  <MaterialCommunityIcons
+                    name="account-off-outline"
+                    size={15}
+                    color={D.danger}
+                  />
+                  <Text style={styles.mobileActionBtnDangerText}>Deactivate</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
         )}
       />
@@ -596,31 +639,72 @@ const styles = StyleSheet.create({
   mobileList: { padding: 16, gap: 10, paddingBottom: 80 },
 
   mobileCard: {
-    flexDirection: "row",
-    alignItems: "center",
     backgroundColor: D.surface,
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: D.border,
     padding: 14,
+    gap: 10,
+  },
+  mobileCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
-  mobileCardLeft: {},
-  mobileCardBody: { flex: 1, gap: 4 },
-  mobileCardTopRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  mobileCardName: { fontSize: 15, fontWeight: "600", color: D.text, flex: 1 },
+  mobileCardBody: { flex: 1, gap: 2, minWidth: 0 },
+  mobileCardName: { fontSize: 15, fontWeight: "600", color: D.text },
   mobileCardEmail: { fontSize: 13, color: D.muted },
-  mobileCardBottomRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
-  mobileCardLastLogin: { fontSize: 11, color: D.muted },
-
-  moreBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
+  mobileCardBadgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
   },
-  moreBtnPressed: { backgroundColor: D.bg },
+  mobileCardLastLogin: { fontSize: 12, color: D.muted },
+  mobileCardActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 2,
+    flexWrap: "wrap",
+  },
+  mobileActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: D.infoSurface,
+  },
+  mobileActionBtnDanger: {
+    backgroundColor: D.dangerBg,
+  },
+  mobileActionBtnText: {
+    color: D.primary,
+    fontWeight: "600",
+    fontSize: 12,
+  },
+  mobileActionBtnDangerText: {
+    color: D.danger,
+    fontWeight: "600",
+    fontSize: 12,
+  },
+
+  errorToast: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: D.dangerBg,
+    borderColor: D.danger,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  errorToastText: { flex: 1, color: D.danger, fontSize: 13, fontWeight: "600" },
 
   avatarMedium: {
     width: 44,

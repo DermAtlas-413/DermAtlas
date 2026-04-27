@@ -1,4 +1,9 @@
-import type { AdminUser, CreateUserPayload, UpdateUserPayload } from "@/types/admin";
+import type {
+  AdminPatient,
+  AdminUser,
+  CreateUserPayload,
+  UpdateUserPayload,
+} from "@/types/admin";
 import { apiFetch, USE_MOCK, delay } from "./http";
 
 const MOCK_USERS: AdminUser[] = [
@@ -110,4 +115,48 @@ export async function deactivateUser(userId: string): Promise<void> {
     return;
   }
   await apiFetch<void>(`/users/${userId}`, { method: "DELETE" });
+}
+
+const MOCK_ADMIN_PATIENTS: AdminPatient[] = [
+  {
+    patient_id: 1,
+    mrn_internal: "MRN-001",
+    full_name: "Alice Johnson",
+    date_of_birth: "1985-06-15",
+    gender: "F",
+    user_id: 6,
+    patient_email: "alice.johnson@email.com",
+    primary_physician_id: 1,
+    primary_physician_name: "Dr. Sarah Chen",
+    primary_physician_email: "sarah.chen@hospital.org",
+  },
+];
+
+export async function getAdminPatients(): Promise<AdminPatient[]> {
+  if (USE_MOCK) {
+    await delay(300);
+    return [...MOCK_ADMIN_PATIENTS];
+  }
+  return apiFetch<AdminPatient[]>("/admin/patients");
+}
+
+export async function reassignPatientPhysician(
+  patientId: number,
+  physicianId: number,
+): Promise<AdminPatient> {
+  if (USE_MOCK) {
+    await delay(300);
+    const idx = MOCK_ADMIN_PATIENTS.findIndex((p) => p.patient_id === patientId);
+    if (idx < 0) throw new Error("Patient not found");
+    MOCK_ADMIN_PATIENTS[idx] = {
+      ...MOCK_ADMIN_PATIENTS[idx],
+      primary_physician_id: physicianId,
+    };
+    return MOCK_ADMIN_PATIENTS[idx];
+  }
+  return apiFetch<AdminPatient>(`/admin/patients/${patientId}/physician`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ physician_id: physicianId }),
+  });
 }

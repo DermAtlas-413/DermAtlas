@@ -1,7 +1,6 @@
 """Unit tests for application settings / config loading."""
 
 import os
-from functools import lru_cache
 
 import pytest
 

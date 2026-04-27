@@ -79,6 +79,7 @@ class TestPatientResponseSchema:
         p = PatientResponse(
             patient_id=1,
             mrn_internal="MRN-001",
+            full_name="Test Patient",
             date_of_birth="1980-05-15",
             gender="M",
             clinical_images=[],

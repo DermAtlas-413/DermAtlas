@@ -3,6 +3,7 @@ import {
   SafeAreaView,
   View,
   Text,
+  TextInput,
   Pressable,
   StyleSheet,
   ScrollView,
@@ -22,6 +23,17 @@ import type { PatientResponse } from "@/types/api";
 import { displayRole } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
 
+const LESION_LOCATIONS = [
+  "head/neck",
+  "torso",
+  "upper extremity",
+  "lower extremity",
+  "palms/soles",
+  "oral/genital",
+  "unknown",
+] as const;
+type LesionLocation = typeof LESION_LOCATIONS[number];
+
 export default function Upload() {
   const authorized = useRequireRole("PCP");
   const router = useRouter();
@@ -30,7 +42,11 @@ export default function Upload() {
   const setCase = useCurrentCaseStore((s) => s.setCase);
   const [selectedPatient, setSelectedPatient] = useState<PatientResponse | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [lesionLocation, setLesionLocation] = useState<LesionLocation | null>(null);
+  const [notes, setNotes] = useState<string>("");
   const [uploading, setUploading] = useState(false);
+
+  const NOTES_MAX = 2000;
 
   const { pickFromCamera, pickFromLibrary } = useImageCapture(setImageUri);
 
@@ -50,11 +66,21 @@ export default function Upload() {
       Alert.alert("No image selected", "Please capture or upload a lesion image first.");
       return;
     }
+    if (!lesionLocation) {
+      Alert.alert("No location selected", "Please select the lesion location before submitting.");
+      return;
+    }
     setUploading(true);
     try {
       const response = await fetch(imageUri);
       const blob = await response.blob();
-      const res = await uploadImage(blob, selectedPatient.patient_id, "unspecified");
+      const trimmedNotes = notes.trim();
+      const res = await uploadImage(
+        blob,
+        selectedPatient.patient_id,
+        lesionLocation,
+        trimmedNotes || undefined,
+      );
       setCase({
         patientId: selectedPatient.patient_id,
         patientMrn: selectedPatient.mrn_internal,
@@ -173,6 +199,53 @@ export default function Upload() {
             </View>
           </View>
 
+          {/* Lesion location */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Lesion Location</Text>
+            <View style={styles.locationGrid}>
+              {LESION_LOCATIONS.map((loc) => (
+                <Pressable
+                  key={loc}
+                  style={[
+                    styles.locationChip,
+                    lesionLocation === loc && styles.locationChipSelected,
+                  ]}
+                  onPress={() => setLesionLocation(loc)}
+                >
+                  <Text
+                    style={[
+                      styles.locationChipText,
+                      lesionLocation === loc && styles.locationChipTextSelected,
+                    ]}
+                  >
+                    {loc}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* Clinician notes */}
+          <View style={styles.section}>
+            <View style={styles.notesHeader}>
+              <Text style={styles.sectionLabel}>Notes / Diagnosis</Text>
+              <Text style={styles.notesCounter}>
+                {notes.length}/{NOTES_MAX}
+              </Text>
+            </View>
+            <TextInput
+              style={styles.notesInput}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Optional clinical observations, working diagnosis, or differential..."
+              placeholderTextColor={D.muted}
+              multiline
+              maxLength={NOTES_MAX}
+              editable={!uploading}
+              textAlignVertical="top"
+            />
+          </View>
+
           {/* Guideline */}
           <View style={styles.guideCard}>
             <MaterialCommunityIcons
@@ -191,10 +264,10 @@ export default function Upload() {
             style={({ pressed }) => [
               styles.submitBtn,
               pressed && styles.submitBtnPressed,
-              (uploading || !selectedPatient) && styles.submitBtnDisabled,
+              (uploading || !selectedPatient || !lesionLocation) && styles.submitBtnDisabled,
             ]}
             onPress={handleSubmit}
-            disabled={uploading || !selectedPatient}
+            disabled={uploading || !selectedPatient || !lesionLocation}
           >
             {uploading ? (
               <ActivityIndicator size="small" color={D.onPrimary} />
@@ -300,6 +373,54 @@ const styles = StyleSheet.create({
   actionCardPressed: { opacity: 0.8 },
   actionIconWrap: {},
   actionLabel: { color: D.primary, fontWeight: "700", fontSize: 13 },
+
+  locationGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  locationChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: D.border,
+    backgroundColor: D.surface,
+  },
+  locationChipSelected: {
+    borderColor: D.primary,
+    backgroundColor: D.infoSurface,
+  },
+  locationChipText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: D.muted,
+  },
+  locationChipTextSelected: {
+    color: D.primary,
+  },
+
+  notesHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  notesCounter: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: D.muted,
+  },
+  notesInput: {
+    backgroundColor: D.surface,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: D.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 110,
+    fontSize: 14,
+    color: D.text,
+  },
 
   guideCard: {
     flexDirection: "row",

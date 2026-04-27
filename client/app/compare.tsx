@@ -15,9 +15,16 @@ import { useAuthStore } from "@/state/auth-store";
 import { useCurrentCaseStore } from "@/state/current-case-store";
 import { useRequireRole } from "@/hooks/use-require-role";
 import { analyzeLesion } from "@/services/lesion-service";
+import { getMyUploads } from "@/services/patient-service";
 import { DEMO_IMAGES, DEMO_UPLOAD_IMAGE } from "@/constants/demo-images";
-import type { AnalyzeMatch } from "@/types/api";
-import { displayRole } from "@/types/api";
+import { VisibilityToggle } from "@/components/visibility-toggle";
+import type {
+  AnalyzeMatch,
+  AnalyzeResponse,
+  DiagnosisClass,
+  PcpCaseSummary,
+} from "@/types/api";
+import { displayRole, DIAGNOSIS_LABELS, MALIGNANT_CLASSES } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
 // === NEW: added Modal and TextInput ===
 import { Modal, TextInput } from "react-native";
@@ -28,12 +35,15 @@ export default function Compare() {
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const { queryId } = useLocalSearchParams<{ queryId?: string }>();
-  const patientName = useCurrentCaseStore((s) => s.patientName);
-  const patientMrn = useCurrentCaseStore((s) => s.patientMrn);
-  const patientId = useCurrentCaseStore((s) => s.patientId);
-  const imageUri = useCurrentCaseStore((s) => s.imageUri);
+  const storePatientName = useCurrentCaseStore((s) => s.patientName);
+  const storePatientMrn = useCurrentCaseStore((s) => s.patientMrn);
+  const storePatientId = useCurrentCaseStore((s) => s.patientId);
+  const storeImageUri = useCurrentCaseStore((s) => s.imageUri);
   const setFeedbackTarget = useCurrentCaseStore((s) => s.setFeedbackTarget);
-  const [matches, setMatches] = useState<AnalyzeMatch[]>([]);
+  const [historicalCase, setHistoricalCase] = useState<PcpCaseSummary | null>(null);
+  const [benignMatches, setBenignMatches] = useState<AnalyzeMatch[]>([]);
+  const [malignantMatches, setMalignantMatches] = useState<AnalyzeMatch[]>([]);
+  const [mlResult, setMlResult] = useState<AnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // === NEW: modal visibility state ===
@@ -42,13 +52,41 @@ export default function Compare() {
   const [message, setMessage] = useState("");
   const [sentConsult, setSentConsult] = useState<any>(null);
 
-  const patientLabel = patientName || patientMrn || (patientId ? `ID # ${patientId}` : "—");
+  // Prefer the in-memory store (populated by the upload flow); fall back to
+  // the backend-fetched case when the user navigates here from /my-uploads.
+  const patientName = storePatientName || historicalCase?.patient_name || null;
+  const patientMrn = storePatientMrn || historicalCase?.patient_mrn || null;
+  const patientId = storePatientId || historicalCase?.patient_id || null;
+  const imageUri = storeImageUri || historicalCase?.gcs_uri || null;
+
+  const patientLabel =
+    patientName || patientMrn || (patientId ? `ID # ${patientId}` : "—");
+
+  useEffect(() => {
+    if (!authorized) return;
+    // If we landed here via ?queryId= but don't have store data (e.g. from
+    // /my-uploads), pull the case detail so the header/image are populated.
+    if (queryId && !storePatientName) {
+      getMyUploads()
+        .then((cases) => {
+          const found = cases.find((c) => c.query_id === queryId);
+          if (found) setHistoricalCase(found);
+        })
+        .catch(() => {
+          // Non-fatal: the analyze call is what matters for the page.
+        });
+    }
+  }, [queryId, authorized, storePatientName]);
 
   useEffect(() => {
     if (!authorized) return;
     setError(null);
     analyzeLesion(queryId ?? "mock")
-      .then((res) => setMatches(res.results))
+      .then((res) => {
+        setBenignMatches(res.benign_results);
+        setMalignantMatches(res.malignant_results);
+        setMlResult(res);
+      })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
       })
@@ -112,6 +150,11 @@ export default function Compare() {
             </View>
           </View>
 
+          {/* Patient visibility toggle */}
+          {queryId && (
+            <VisibilityToggle queryId={queryId} />
+          )}
+
           {/* Submitted image */}
           <View style={styles.imageSection}>
             <Text style={styles.sectionLabel}>Submitted Image</Text>
@@ -132,58 +175,74 @@ export default function Compare() {
             </View>
           )}
 
-          {/* Similar cases */}
-          <View>
-            <Text style={styles.sectionLabel}>
-              Similar Cases &nbsp;
-              <Text style={styles.sectionCount}>
-                {matches.length} matches
-              </Text>
-            </Text>
-            {loading ? (
-              <ActivityIndicator size="large" color={D.primary} style={{ marginTop: 20 }} />
-            ) : (
-            <View style={styles.grid}>
-              {matches.map((m) => (
-                <MatchCard
-                  key={m.reference_id}
-                  m={m}
-                  onPress={() => {
-                    const similarity = Math.round(m.score * 100);
-                    setFeedbackTarget({
-                      matchId: m.reference_id,
-                      referenceId: m.reference_id,
-                      diagnosis: m.diagnosis_label ?? "",
-                      similarity,
-                      referenceImageUri: m.gcs_uri ?? "",
-                    });
-                    router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
-                  }}
-                />
-              ))}
-            </View>
-            )}
-          </View>
-          {/* === NEW: Second opinion button === */}
-          <View style={{ marginTop: 20 }}>
-            <Pressable
-            onPress={() => {
-              setSelectedPCP(null);
-              setMessage("");
-              setShowConsultModal(true);
-            }}
-            style={{
-              backgroundColor: D.primary,
-              padding: 14,
-              borderRadius: 10,
-              alignItems: "center",
-            }}
-            >
-              <Text style={{ color: "white", fontWeight: "700" }}>
-                Request Second Opinion
-                </Text>
-                </Pressable>
-           </View>
+          {/* Similar cases — split into benign and malignant */}
+{loading ? (
+  <ActivityIndicator size="large" color={D.primary} style={{ marginTop: 20 }} />
+) : (
+  <>
+    {/* ML Risk Assessment */}
+    {mlResult && (
+      <MLResultPanel result={mlResult} />
+    )}
+
+    <MatchSection
+      title="Closest Malignant Matches"
+      accent={D.danger}
+      accentBg={D.dangerBg}
+      matches={malignantMatches}
+      emptyHint="No close malignant matches in the atlas"
+      onPressMatch={(m) => {
+        const similarity = Math.round(m.score * 100);
+        setFeedbackTarget({
+          matchId: m.reference_id,
+          referenceId: m.reference_id,
+          diagnosis: m.diagnosis_label ?? "",
+          similarity,
+          referenceImageUri: m.gcs_uri ?? "",
+        });
+        router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
+      }}
+    />
+
+    <MatchSection
+      title="Closest Benign Matches"
+      accent={D.success}
+      accentBg={D.successBg}
+      matches={benignMatches}
+      emptyHint="No close benign matches in the atlas"
+      onPressMatch={(m) => {
+        const similarity = Math.round(m.score * 100);
+        setFeedbackTarget({
+          matchId: m.reference_id,
+          referenceId: m.reference_id,
+          diagnosis: m.diagnosis_label ?? "",
+          similarity,
+          referenceImageUri: m.gcs_uri ?? "",
+        });
+        router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
+      }}
+    />
+  </>
+)}
+<View style={{ marginTop: 20 }}>
+  <Pressable
+    onPress={() => {
+      setSelectedPCP(null);
+      setMessage("");
+      setShowConsultModal(true);
+    }}
+    style={{
+      backgroundColor: D.primary,
+      padding: 14,
+      borderRadius: 10,
+      alignItems: "center",
+    }}
+  >
+    <Text style={{ color: "white", fontWeight: "700" }}>
+      Request Second Opinion
+    </Text>
+  </Pressable>
+</View>
         </View>
       </ScrollView>
       {/* === NEW: Consultation modal === */}
@@ -293,7 +352,6 @@ export default function Compare() {
               message,
               queryId,
               image: imageUri,
-              matches,
             }
 
             setSentConsult(consultPayload);
@@ -322,6 +380,102 @@ export default function Compare() {
   </View>
 </Modal>
     </SafeAreaView>
+  );
+}
+
+function MLResultPanel({ result }: { result: AnalyzeResponse }) {
+  const riskColor = result.risk_flag ? D.danger : D.success;
+  const riskBg = result.risk_flag ? D.dangerBg : D.successBg;
+  const riskLabel = result.risk_flag ? "High Malignancy Risk" : "Low Malignancy Risk";
+  const malPct = Math.round(result.malignancy_probability * 100);
+
+  return (
+    <View style={ml.container}>
+      {/* Risk banner */}
+      <View style={[ml.riskBanner, { backgroundColor: riskBg, borderColor: riskColor }]}>
+        <MaterialCommunityIcons
+          name={result.risk_flag ? "alert-circle" : "check-circle"}
+          size={20}
+          color={riskColor}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={[ml.riskLabel, { color: riskColor }]}>{riskLabel}</Text>
+          <Text style={[ml.riskSub, { color: riskColor }]}>
+            Malignancy probability: {malPct}%
+          </Text>
+        </View>
+      </View>
+
+      {/* Probability distribution */}
+      <Text style={ml.subheading}>Diagnosis Probability</Text>
+      {(Object.entries(result.predicted_probs) as [DiagnosisClass, number][])
+        .sort(([, a], [, b]) => b - a)
+        .map(([cls, prob]) => {
+          const isMal = MALIGNANT_CLASSES.includes(cls);
+          const barColor = isMal ? D.danger : D.success;
+          const pct = Math.round(prob * 100);
+          return (
+            <View key={cls} style={ml.probRow}>
+              <Text style={ml.probLabel}>{DIAGNOSIS_LABELS[cls]}</Text>
+              <View style={ml.probBarTrack}>
+                <View style={[ml.probBarFill, { width: `${pct}%` as `${number}%`, backgroundColor: barColor }]} />
+              </View>
+              <Text style={[ml.probPct, { color: isMal ? D.danger : D.text }]}>{pct}%</Text>
+            </View>
+          );
+        })}
+
+      {/* Believability */}
+      <View style={ml.believabilityRow}>
+        <MaterialCommunityIcons name="star-half-full" size={14} color={D.muted} />
+        <Text style={ml.believabilityText}>
+          Believability:{" "}
+          {result.believability_score !== null && result.believability_score !== undefined
+            ? `${Math.round(result.believability_score * 100)}%`
+            : "building confidence…"}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function MatchSection({
+  title,
+  accent,
+  accentBg,
+  matches,
+  emptyHint,
+  onPressMatch,
+}: {
+  title: string;
+  accent: string;
+  accentBg: string;
+  matches: AnalyzeMatch[];
+  emptyHint: string;
+  onPressMatch: (m: AnalyzeMatch) => void;
+}) {
+  return (
+    <View style={styles.matchSection}>
+      <View style={[styles.sectionHeader, { backgroundColor: accentBg }]}>
+        <View style={[styles.sectionDot, { backgroundColor: accent }]} />
+        <Text style={[styles.sectionHeaderText, { color: accent }]}>{title}</Text>
+        <Text style={[styles.sectionHeaderCount, { color: accent }]}>
+          {matches.length}
+        </Text>
+      </View>
+      {matches.length === 0 ? (
+        <View style={styles.emptyState}>
+          <MaterialCommunityIcons name="image-off-outline" size={22} color={D.muted} />
+          <Text style={styles.emptyStateText}>{emptyHint}</Text>
+        </View>
+      ) : (
+        <View style={styles.grid}>
+          {matches.map((m) => (
+            <MatchCard key={m.reference_id} m={m} onPress={() => onPressMatch(m)} />
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -428,6 +582,74 @@ function SimilarityBadge({ value }: { value: number }) {
     </View>
   );
 }
+
+const ml = StyleSheet.create({
+  container: {
+    backgroundColor: D.surface,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: D.border,
+    padding: 16,
+    gap: 12,
+  },
+  riskBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  riskLabel: { fontWeight: "700", fontSize: 14 },
+  riskSub: { fontSize: 12, fontWeight: "500", marginTop: 2 },
+  subheading: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: D.text,
+    letterSpacing: 0.3,
+    marginTop: 4,
+  },
+  probRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  probLabel: {
+    width: 150,
+    fontSize: 12,
+    fontWeight: "500",
+    color: D.text,
+  },
+  probBarTrack: {
+    flex: 1,
+    height: 6,
+    backgroundColor: D.barTrack,
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  probBarFill: { height: "100%", borderRadius: 4 },
+  probPct: {
+    width: 36,
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+  believabilityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: D.border,
+  },
+  believabilityText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: D.muted,
+  },
+});
 
 const bar = StyleSheet.create({
   wrap: {
@@ -537,6 +759,47 @@ const styles = StyleSheet.create({
     height: "100%",
   },
 
+  matchSection: { gap: 10, marginBottom: 8 },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  sectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  sectionHeaderText: {
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    flex: 1,
+  },
+  sectionHeaderCount: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  emptyState: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 18,
+    backgroundColor: D.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: D.border,
+    borderStyle: "dashed",
+  },
+  emptyStateText: {
+    color: D.muted,
+    fontSize: 12,
+    fontWeight: "600",
+  },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",

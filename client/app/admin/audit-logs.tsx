@@ -10,7 +10,10 @@ import {
   ActivityIndicator,
   Platform,
   ScrollView,
+  useWindowDimensions,
 } from "react-native";
+
+const DESKTOP_BREAKPOINT = 820;
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { DermAtlasColors as D } from "@/constants/theme";
@@ -43,8 +46,10 @@ function getDateRange(filter: DateFilter): { from?: string; to?: string } {
 const PAGE_SIZE = 20;
 
 export default function AuditLogs() {
-  const authorized = useRequireRole("PCP");
+  const authorized = useRequireRole({ role: "PCP", adminOnly: true });
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= DESKTOP_BREAKPOINT;
 
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [total, setTotal] = useState(0);
@@ -192,7 +197,7 @@ export default function AuditLogs() {
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
-      ) : Platform.OS === "web" ? (
+      ) : isDesktop ? (
         <WebLogList
           entries={entries}
           total={total}
@@ -399,8 +404,10 @@ function MobileLogList({
           >
             <View style={styles.mobileCardTop}>
               <View style={styles.mobileCardTopLeft}>
-                <Text style={styles.mobileCardAction}>{item.action}</Text>
-                <Text style={styles.mobileCardMeta}>
+                <Text style={styles.mobileCardAction} numberOfLines={2}>
+                  {item.action}
+                </Text>
+                <Text style={styles.mobileCardMeta} numberOfLines={1}>
                   {item.user_name} · {formatDateTime(item.timestamp)}
                 </Text>
               </View>
@@ -408,7 +415,7 @@ function MobileLogList({
             </View>
             <View style={styles.mobileCardResourceRow}>
               <MaterialCommunityIcons name="file-outline" size={13} color={D.muted} />
-              <Text style={styles.mobileCardResource}>
+              <Text style={styles.mobileCardResource} numberOfLines={1}>
                 {item.resource_type} · {item.resource_id}
               </Text>
             </View>
@@ -594,11 +601,11 @@ const styles = StyleSheet.create({
   },
   mobileCardPressed: { backgroundColor: D.bg },
   mobileCardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  mobileCardTopLeft: { flex: 1, gap: 3 },
+  mobileCardTopLeft: { flex: 1, gap: 3, minWidth: 0 },
   mobileCardAction: { fontSize: 14, fontWeight: "600", color: D.text },
   mobileCardMeta: { fontSize: 12, color: D.muted },
   mobileCardResourceRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  mobileCardResource: { fontSize: 12, color: D.muted },
+  mobileCardResource: { fontSize: 12, color: D.muted, flex: 1 },
   mobileExpandedDetail: {
     marginTop: 8,
     paddingTop: 10,
