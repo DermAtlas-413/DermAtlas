@@ -26,6 +26,8 @@ import type {
 } from "@/types/api";
 import { displayRole, DIAGNOSIS_LABELS, MALIGNANT_CLASSES } from "@/types/api";
 import { DermAtlasColors as D } from "@/constants/theme";
+// === NEW: added Modal and TextInput ===
+import { Modal, TextInput } from "react-native";
 
 export default function Compare() {
   const authorized = useRequireRole("PCP");
@@ -44,6 +46,11 @@ export default function Compare() {
   const [mlResult, setMlResult] = useState<AnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // === NEW: modal visibility state ===
+  const [showConsultModal, setShowConsultModal] = useState(false);
+  const [selectedPCP, setSelectedPCP] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [sentConsult, setSentConsult] = useState<any>(null);
 
   // Prefer the in-memory store (populated by the upload flow); fall back to
   // the backend-fetched case when the user navigates here from /my-uploads.
@@ -169,55 +176,209 @@ export default function Compare() {
           )}
 
           {/* Similar cases — split into benign and malignant */}
-          {loading ? (
-            <ActivityIndicator size="large" color={D.primary} style={{ marginTop: 20 }} />
-          ) : (
-            <>
-              {/* ML Risk Assessment */}
-              {mlResult && (
-                <MLResultPanel result={mlResult} />
-              )}
+{loading ? (
+  <ActivityIndicator size="large" color={D.primary} style={{ marginTop: 20 }} />
+) : (
+  <>
+    {/* ML Risk Assessment */}
+    {mlResult && (
+      <MLResultPanel result={mlResult} />
+    )}
 
-              <MatchSection
-                title="Closest Malignant Matches"
-                accent={D.danger}
-                accentBg={D.dangerBg}
-                matches={malignantMatches}
-                emptyHint="No close malignant matches in the atlas"
-                onPressMatch={(m) => {
-                  const similarity = Math.round(m.score * 100);
-                  setFeedbackTarget({
-                    matchId: m.reference_id,
-                    referenceId: m.reference_id,
-                    diagnosis: m.diagnosis_label ?? "",
-                    similarity,
-                    referenceImageUri: m.gcs_uri ?? "",
-                  });
-                  router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
-                }}
-              />
-              <MatchSection
-                title="Closest Benign Matches"
-                accent={D.success}
-                accentBg={D.successBg}
-                matches={benignMatches}
-                emptyHint="No close benign matches in the atlas"
-                onPressMatch={(m) => {
-                  const similarity = Math.round(m.score * 100);
-                  setFeedbackTarget({
-                    matchId: m.reference_id,
-                    referenceId: m.reference_id,
-                    diagnosis: m.diagnosis_label ?? "",
-                    similarity,
-                    referenceImageUri: m.gcs_uri ?? "",
-                  });
-                  router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
-                }}
-              />
-            </>
-          )}
+    <MatchSection
+      title="Closest Malignant Matches"
+      accent={D.danger}
+      accentBg={D.dangerBg}
+      matches={malignantMatches}
+      emptyHint="No close malignant matches in the atlas"
+      onPressMatch={(m) => {
+        const similarity = Math.round(m.score * 100);
+        setFeedbackTarget({
+          matchId: m.reference_id,
+          referenceId: m.reference_id,
+          diagnosis: m.diagnosis_label ?? "",
+          similarity,
+          referenceImageUri: m.gcs_uri ?? "",
+        });
+        router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
+      }}
+    />
+
+    <MatchSection
+      title="Closest Benign Matches"
+      accent={D.success}
+      accentBg={D.successBg}
+      matches={benignMatches}
+      emptyHint="No close benign matches in the atlas"
+      onPressMatch={(m) => {
+        const similarity = Math.round(m.score * 100);
+        setFeedbackTarget({
+          matchId: m.reference_id,
+          referenceId: m.reference_id,
+          diagnosis: m.diagnosis_label ?? "",
+          similarity,
+          referenceImageUri: m.gcs_uri ?? "",
+        });
+        router.push(`/feedback?matchId=${m.reference_id}&referenceId=${m.reference_id}`);
+      }}
+    />
+  </>
+)}
+<View style={{ marginTop: 20 }}>
+  <Pressable
+    onPress={() => {
+      setSelectedPCP(null);
+      setMessage("");
+      setShowConsultModal(true);
+    }}
+    style={{
+      backgroundColor: D.primary,
+      padding: 14,
+      borderRadius: 10,
+      alignItems: "center",
+    }}
+  >
+    <Text style={{ color: "white", fontWeight: "700" }}>
+      Request Second Opinion
+    </Text>
+  </Pressable>
+</View>
         </View>
       </ScrollView>
+      {/* === NEW: Consultation modal === */}
+<Modal visible={showConsultModal} transparent animationType="slide">
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "center",
+      padding: 20,
+    }}
+  >
+    <View
+      style={{
+        backgroundColor: "white",
+        borderRadius: 16,
+        padding: 20,
+      }}
+    >
+      <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 12 }}>
+        Request Second Opinion
+      </Text>
+      <Text style={{ marginBottom: 8 }}>Select PCP</Text>
+
+{[
+  { email: "dr.quach@hospital.com", name: "Dr. Quach" },
+  { email: "dr.patel@hospital.com", name: "Dr. Patel" },
+  { email: "dr.chen@hospital.com", name: "Dr. Chen" },
+].map((p) => (
+  <Pressable
+    key={p.email}
+    onPress={() => setSelectedPCP(p.email)}
+    style={{
+      padding: 10,
+      borderRadius: 8,
+      marginBottom: 8,
+      backgroundColor:
+        selectedPCP === p.email ? D.primary : "#eee",
+    }}
+  >
+    <Text
+      style={{
+        color: selectedPCP === p.email ? "white" : "black",
+        fontWeight: "600",
+      }}
+    >
+      {p.name}
+    </Text>
+  </Pressable>
+))}
+
+        {imageUri && (
+          <View style={{ marginBottom: 10 }}>
+            <Text style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>
+              Attached Image
+            </Text>
+            <Image
+              source={{ uri: imageUri }}
+              style={{
+                width: "50%",
+                aspectRatio: 1.5,
+                maxHeight: 400,
+                borderRadius: 8,
+              }}
+                contentFit="cover"
+            />
+          </View>
+        )}
+      <Text style={{ marginBottom: 4 }}>Message</Text>
+      <TextInput
+      placeholder="Add message..."
+      multiline
+      value={message}
+      onChangeText={setMessage}
+      style={{
+        borderWidth: 1,
+        borderColor: "#ccc",
+        borderRadius: 8,
+        padding: 10,
+        height: 80,
+        }}
+      />
+
+      <View style={{ flexDirection: "row", marginTop: 16, gap: 10 }}>
+        <Pressable
+          onPress={() => setShowConsultModal(false)}
+          style={{
+            flex: 1,
+            padding: 12,
+            backgroundColor: "#ddd",
+            borderRadius: 8,
+            alignItems: "center",
+          }}
+        >
+          <Text>Cancel</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => {
+            if (!selectedPCP) {
+              alert("Please select a PCP");
+              return;
+            }
+            const consultPayload = {
+              from: user?.fullName,
+              to: selectedPCP,
+              message,
+              queryId,
+              image: imageUri,
+            }
+
+            setSentConsult(consultPayload);
+            
+            alert(`Second opinion request sent to ${selectedPCP}`);
+
+            setMessage("");
+            setSelectedPCP(null);
+            setShowConsultModal(false);
+
+          }}
+          style={{
+            flex: 1,
+            padding: 12,
+            backgroundColor: D.primary,
+            borderRadius: 8,
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: "white", fontWeight: "600" }}>
+            Send
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  </View>
+</Modal>
     </SafeAreaView>
   );
 }
