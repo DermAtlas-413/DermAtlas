@@ -2,6 +2,8 @@
 
 DermAtlas is a Clinical Decision Support (CDS) system for Primary Care Physicians (PCPs). It uses Content-Based Image Retrieval (CBIR) to surface historical, expert-labeled skin lesion cases visually similar to a patient's uploaded photo.
 
+> **Note for TAs / Graders:** The GCP production instances (Cloud Run, Cloud SQL, Cloud Storage, Vertex AI) are currently **offline** to avoid ongoing cloud charges. To evaluate the full live system, please reach out to the team and we will spin them back up. In the meantime, the full UI can be demoed using **mock mode** (see Quick Start below), and the backend and its test suite run entirely locally with no GCP credentials required.
+
 ---
 
 ## Quick Start (Demo Mode — No GCP Required)
